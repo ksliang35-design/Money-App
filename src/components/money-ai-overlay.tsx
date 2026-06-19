@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react';
 import {
+  ActivityIndicator,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -13,7 +14,8 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { MC, MF, MR, MS, fmt } from '@/constants/money-theme';
-import { MOCK } from '@/constants/mock-data';
+import { getAIReply } from '@/lib/coach';
+import { useAppData } from '@/store/AppDataProvider';
 
 type Message = { role: 'ai' | 'user'; text: string; action?: PendingAction };
 type PendingAction = { label: string; description: string };
@@ -25,46 +27,6 @@ const QUICK_ACTIONS = [
   { icon: '🎯', label: 'Goal plan', q: 'How can I reach my emergency fund goal faster?' },
 ];
 
-function getMockReply(q: string): { text: string; action?: PendingAction } {
-  const lower = q.toLowerCase();
-  if (lower.includes('weekly') || lower.includes('check')) {
-    return {
-      text: `Weekly snapshot for ${MOCK.month}:\n\n• Income: ${fmt(MOCK.income)} ✅\n• Spent: ${fmt(MOCK.expense)} (${MOCK.savingsRate}% saved)\n• Leftover: ${fmt(MOCK.net)}\n\nYour rent + family support is ${fmt(1000 + 1200)} — your two biggest fixed costs. Everything else looks controlled. Keep it up!`,
-    };
-  }
-  if (lower.includes('health')) {
-    return {
-      text: `Verdict: Healthy but with room to grow 💚\n\n✅ Saving ${MOCK.savingsRate}% — above the 20% baseline\n✅ Side income covers ${MOCK.sideShare}% of total\n⚠️ Emergency fund only 25% funded\n\nPriority: top up your emergency fund before anything else.`,
-    };
-  }
-  if (lower.includes('save') || lower.includes('saving')) {
-    return {
-      text: `3 realistic moves to save more:\n\n1. Reduce shopping from ${fmt(213)} → ${fmt(150)} saves ~${fmt(63)}/mo\n2. Pack lunch twice a week, cuts food by ~${fmt(60)}/mo\n3. Review subscriptions — easy ${fmt(40)}+ save\n\nTotal potential: ~${fmt(163)}/mo extra`,
-      action: {
-        label: 'Set a spending alert',
-        description: 'Add a RM150 soft cap on shopping this month?',
-      },
-    };
-  }
-  if (lower.includes('goal') || lower.includes('emergency') || lower.includes('fund')) {
-    return {
-      text: `Emergency fund: ${fmt(3000)} of ${fmt(12000)} (25%)\n\nAt your current pace (${fmt(MOCK.net)}/mo leftover), dedicating ${fmt(500)}/mo gets you there in ~18 months.\n\nSmall boost: redirect the ${fmt(80)} entertainment budget → emergency fund for 3 months.`,
-      action: {
-        label: 'Allocate RM500/mo to goal',
-        description: 'Mark RM500 of this month\'s leftover toward Emergency Fund?',
-      },
-    };
-  }
-  if (lower.includes('invest')) {
-    return {
-      text: `With ${fmt(MOCK.net)} leftover, a simple split:\n\n• ${fmt(500)} → Emergency fund (priority)\n• ${fmt(300)} → ASB or fixed deposit\n• ${fmt(200)} → Business capital goal\n• Rest → buffer\n\nNote: I'm not a licensed advisor — consult one before any large commitment.`,
-    };
-  }
-  return {
-    text: `Based on your ${MOCK.month} numbers:\n• Income: ${fmt(MOCK.income)}\n• Expenses: ${fmt(MOCK.expense)}\n• Leftover: ${fmt(MOCK.net)}\n\nWhat would you like to explore? Try asking about your savings, goals, or spending habits.`,
-  };
-}
-
 interface Props {
   visible: boolean;
   onClose: () => void;
@@ -73,25 +35,74 @@ interface Props {
 export function MoneyAIOverlay({ visible, onClose }: Props) {
   const insets = useSafeAreaInsets();
   const scrollRef = useRef<ScrollView>(null);
+  const { data } = useAppData();
+
   const [messages, setMessages] = useState<Message[]>([
     {
       role: 'ai',
-      text: `Hi ${MOCK.name}! I can see your finances for ${MOCK.month}. Ask me anything or tap a quick action below.`,
+      text: `Hi ${data.name}! I can see your finances. Ask me anything or tap a quick action below.`,
     },
   ]);
   const [input, setInput] = useState('');
+  const [loading, setLoading] = useState(false);
   const [confirm, setConfirm] = useState<PendingAction | null>(null);
 
-  function send(text: string) {
-    if (!text.trim()) return;
-    const userMsg: Message = { role: 'user', text };
-    const reply = getMockReply(text);
-    const aiMsg: Message = { role: 'ai', text: reply.text, action: reply.action };
-    setMessages((m) => [...m, userMsg, aiMsg]);
+  async function send(q: string) {
+    if (!q.trim() || loading) return;
+
+    const userMsg: Message = { role: 'user', text: q };
+    setMessages((m) => [...m, userMsg]);
     setInput('');
-    setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 100);
-    if (reply.action) {
-      setTimeout(() => setConfirm(reply.action!), 400);
+    setLoading(true);
+    setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 50);
+
+    try {
+      const goalsText = data.goals.length
+        ? data.goals
+            .map(
+              (g) =>
+                `${g.label} (RM ${g.saved.toLocaleString('en-MY')} of RM ${g.target.toLocaleString('en-MY')}, ${Math.round((g.saved / g.target) * 100)}%)`,
+            )
+            .join(', ')
+        : 'No goals set yet';
+
+      // Pass previous conversation (skip greeting, last 8 msgs)
+      const history = messages
+        .slice(1)
+        .slice(-8)
+        .map((m) => ({ role: m.role, text: m.text }));
+
+      const reply = await getAIReply(
+        q,
+        data.name,
+        {
+          income: data.income,
+          expense: data.expense,
+          net: data.net,
+          savingsRate: data.savingsRate,
+          byMethod: data.byMethod,
+        },
+        goalsText,
+        history,
+      );
+
+      const aiMsg: Message = { role: 'ai', text: reply.text, action: reply.action ?? undefined };
+      setMessages((m) => [...m, aiMsg]);
+      if (reply.action) setTimeout(() => setConfirm(reply.action as PendingAction), 400);
+    } catch (e: any) {
+      const isNoKey = e?.message === 'NO_API_KEY';
+      setMessages((m) => [
+        ...m,
+        {
+          role: 'ai',
+          text: isNoKey
+            ? '🔑 API key not set. Add EXPO_PUBLIC_GEMINI_API_KEY to your .env file and restart the server.'
+            : `Sorry, I couldn't get a response right now. ${e?.message?.slice(0, 80) ?? 'Please try again.'}`,
+        },
+      ]);
+    } finally {
+      setLoading(false);
+      setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 100);
     }
   }
 
@@ -104,7 +115,7 @@ export function MoneyAIOverlay({ visible, onClose }: Props) {
             <Text style={styles.horse}>♞</Text>
             <View>
               <Text style={styles.headerTitle}>Money AI</Text>
-              <Text style={styles.headerSub}>mock responses · Claude API coming soon</Text>
+              <Text style={styles.headerSub}>Powered by Gemini · not financial advice</Text>
             </View>
           </View>
           <Pressable onPress={onClose} style={styles.closeBtn}>
@@ -130,12 +141,26 @@ export function MoneyAIOverlay({ visible, onClose }: Props) {
                 </Text>
               </View>
             ))}
+            {loading && (
+              <View style={[styles.bubble, styles.bubbleAI]}>
+                <Text style={styles.bubbleWho}>♞ Money AI</Text>
+                <ActivityIndicator size="small" color={MC.emerald} style={{ marginTop: 2 }} />
+              </View>
+            )}
           </ScrollView>
 
           {/* Quick actions */}
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.quickScroll} contentContainerStyle={styles.quickContent}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={styles.quickScroll}
+            contentContainerStyle={styles.quickContent}>
             {QUICK_ACTIONS.map((a) => (
-              <Pressable key={a.label} style={styles.quickChip} onPress={() => send(a.q)}>
+              <Pressable
+                key={a.label}
+                style={[styles.quickChip, loading && styles.quickChipDisabled]}
+                onPress={() => send(a.q)}
+                disabled={loading}>
                 <Text style={styles.quickChipText}>{a.icon} {a.label}</Text>
               </Pressable>
             ))}
@@ -152,11 +177,12 @@ export function MoneyAIOverlay({ visible, onClose }: Props) {
               onSubmitEditing={() => send(input)}
               returnKeyType="send"
               multiline={false}
+              editable={!loading}
             />
             <Pressable
-              style={[styles.sendBtn, !input.trim() && styles.sendBtnDisabled]}
+              style={[styles.sendBtn, (!input.trim() || loading) && styles.sendBtnDisabled]}
               onPress={() => send(input)}
-              disabled={!input.trim()}>
+              disabled={!input.trim() || loading}>
               <Text style={styles.sendBtnText}>↑</Text>
             </Pressable>
           </View>
@@ -177,7 +203,10 @@ export function MoneyAIOverlay({ visible, onClose }: Props) {
                   onPress={() => {
                     setMessages((m) => [
                       ...m,
-                      { role: 'ai', text: `Done! I've noted: "${confirm!.label}". Remember, I can only suggest — take action in the app to make it real.` },
+                      {
+                        role: 'ai',
+                        text: `Done! I've noted: "${confirm!.label}". Remember, I can only suggest — take action in the app to make it real.`,
+                      },
                     ]);
                     setConfirm(null);
                   }}>
@@ -258,6 +287,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: MS.md,
     paddingVertical: MS.sm,
   },
+  quickChipDisabled: { opacity: 0.4 },
   quickChipText: {
     fontSize: 12,
     fontFamily: MF.semiBold,

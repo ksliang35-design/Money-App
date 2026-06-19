@@ -1,22 +1,3 @@
-import Constants from 'expo-constants';
-import { Platform } from 'react-native';
-
-// Web: relative path served by the Expo dev/prod server.
-// Native dev: dev server host picked up from Expo's manifest.
-// Native prod: set EXPO_PUBLIC_API_BASE to your deployed server URL.
-function getProxyUrl(): string {
-  if (Platform.OS === 'web') return '/api/coach';
-  if (__DEV__) {
-    const host =
-      Constants.expoConfig?.hostUri?.split(':')[0] ??
-      Constants.manifest?.debuggerHost?.split(':')[0] ??
-      'localhost';
-    return `http://${host}:8081/api/coach`;
-  }
-  const base = process.env.EXPO_PUBLIC_API_BASE ?? '';
-  return `${base}/api/coach`;
-}
-
 export interface CoachProfile {
   age: string;
   incomeBracket: string;
@@ -76,8 +57,12 @@ export async function getCoachPlan(
   profile: CoachProfile,
   financials: CoachFinancials,
 ): Promise<CoachPlan> {
-  const userMessage = `My financial profile:
+  const apiKey = process.env.EXPO_PUBLIC_GEMINI_API_KEY;
+  if (!apiKey) throw new Error('NO_API_KEY');
 
+  const fullPrompt = `${SYSTEM_PROMPT}
+
+My financial profile:
 Age range: ${profile.age}
 Income bracket (self-reported): ${profile.incomeBracket}
 Main goal: ${profile.goal}
@@ -91,34 +76,102 @@ This month's numbers:
 
 Give me a personalised budgeting plan.`;
 
-  const requestBody = {
-    model: 'claude-sonnet-4-6',
-    max_tokens: 1000,
-    system: SYSTEM_PROMPT,
-    messages: [{ role: 'user', content: userMessage }],
-  };
-
-  // All platforms route through the Expo API route so the key never lives in
-  // the client bundle. Web uses a relative path; native uses the dev-server
-  // host in development, or EXPO_PUBLIC_API_BASE in production.
-  const proxyUrl = getProxyUrl();
-  const res = await fetch(proxyUrl, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(requestBody),
-  });
+  const res = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
+    {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: fullPrompt }] }],
+      }),
+    },
+  );
 
   if (!res.ok) {
     const body = await res.text().catch(() => '');
-    throw new Error(`API error ${res.status}${body ? `: ${body.slice(0, 120)}` : ''}`);
+    throw new Error(`Gemini error ${res.status}${body ? `: ${body.slice(0, 200)}` : ''}`);
   }
 
   const json = await res.json();
-  const text: string = json.content?.[0]?.text ?? '';
+  const text: string = json.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
 
   const start = text.indexOf('{');
   const end = text.lastIndexOf('}');
-  if (start === -1 || end <= start) throw new Error('No JSON found in response');
+  if (start === -1 || end <= start) throw new Error('No JSON found in Gemini response');
 
   return JSON.parse(text.slice(start, end + 1)) as CoachPlan;
+}
+
+// ── Money AI chat ─────────────────────────────────────────────────────────────
+
+export interface AIReply {
+  text: string;
+  action?: { label: string; description: string } | null;
+}
+
+export async function getAIReply(
+  message: string,
+  name: string,
+  financials: CoachFinancials,
+  goalsText: string,
+  history: Array<{ role: 'user' | 'ai'; text: string }>,
+): Promise<AIReply> {
+  const apiKey = process.env.EXPO_PUBLIC_GEMINI_API_KEY;
+  if (!apiKey) throw new Error('NO_API_KEY');
+
+  const systemText = `You are a careful, helpful money assistant for ${name}, a user in Malaysia. All amounts are in Malaysian Ringgit (RM).
+
+Rules:
+- Give SHORT, helpful replies — 2–5 sentences or a few bullet points max
+- You are NOT a licensed financial advisor; say so briefly if asked for investment advice
+- You NEVER move money or make real changes — you can only SUGGEST actions for the user to confirm
+- When suggesting a concrete action (e.g. set a spending cap, allocate to a goal), include it as an "action"
+- Otherwise set "action" to null
+
+Current finances this month:
+- Income: RM ${financials.income.toLocaleString('en-MY')}
+- Expenses: RM ${financials.expense.toLocaleString('en-MY')}
+- Net savings: RM ${financials.net.toLocaleString('en-MY')} (${financials.savingsRate}% savings rate)
+- Spending: Card RM ${financials.byMethod.card.toLocaleString('en-MY')}, E-wallet RM ${financials.byMethod.ewallet.toLocaleString('en-MY')}, Cash RM ${financials.byMethod.cash.toLocaleString('en-MY')}, Bank RM ${financials.byMethod.bank.toLocaleString('en-MY')}
+- Goals: ${goalsText}
+
+Return ONLY valid JSON — no markdown fences, no extra text:
+{"text": "your reply here", "action": {"label": "Short title", "description": "One-line description"} or null}`;
+
+  // Build multi-turn contents; map 'ai' → 'model' for Gemini
+  const contents: Array<{ role: string; parts: Array<{ text: string }> }> = [];
+  for (const turn of history) {
+    contents.push({ role: turn.role === 'user' ? 'user' : 'model', parts: [{ text: turn.text }] });
+  }
+  contents.push({ role: 'user', parts: [{ text: message }] });
+
+  const res = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
+    {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        systemInstruction: { parts: [{ text: systemText }] },
+        contents,
+      }),
+    },
+  );
+
+  if (!res.ok) {
+    const body = await res.text().catch(() => '');
+    throw new Error(`Gemini error ${res.status}${body ? `: ${body.slice(0, 120)}` : ''}`);
+  }
+
+  const json = await res.json();
+  const text: string = json.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
+
+  const start = text.indexOf('{');
+  const end = text.lastIndexOf('}');
+  if (start !== -1 && end > start) {
+    try {
+      return JSON.parse(text.slice(start, end + 1)) as AIReply;
+    } catch {}
+  }
+
+  return { text: text.trim() || 'Sorry, I had trouble with that. Please try again.', action: null };
 }

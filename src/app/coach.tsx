@@ -231,7 +231,19 @@ export default function CoachScreen() {
             )}
 
             {/* Error */}
-            {!loading && error && (
+            {!loading && error === 'NO_API_KEY' && (
+              <View style={styles.noKeyCard}>
+                <Text style={styles.noKeyIcon}>🔑</Text>
+                <Text style={styles.noKeyTitle}>API key not set</Text>
+                <Text style={styles.noKeyMsg}>
+                  Open the <Text style={styles.noKeyCode}>.env</Text> file in the project root and
+                  paste your Anthropic API key after{'\n'}
+                  <Text style={styles.noKeyCode}>EXPO_PUBLIC_ANTHROPIC_API_KEY=</Text>
+                  {'\n\n'}Then restart the dev server.
+                </Text>
+              </View>
+            )}
+            {!loading && error && error !== 'NO_API_KEY' && (
               <View style={styles.errorCard}>
                 <Text style={styles.errorIcon}>⚠️</Text>
                 <Text style={styles.errorTitle}>Couldn't load your plan</Text>
@@ -426,6 +438,27 @@ const styles = StyleSheet.create({
     gap: MS.md,
   },
   loadingText: { fontSize: 14, fontFamily: MF.medium, color: MC.muted },
+
+  // No API key
+  noKeyCard: {
+    backgroundColor: MC.card,
+    borderWidth: 1,
+    borderColor: MC.line,
+    borderRadius: MR.xl,
+    padding: MS.xl,
+    alignItems: 'center',
+    gap: MS.sm,
+  },
+  noKeyIcon: { fontSize: 32 },
+  noKeyTitle: { fontSize: 16, fontFamily: MF.bold, color: MC.ink },
+  noKeyMsg: {
+    fontSize: 13,
+    fontFamily: MF.regular,
+    color: MC.muted,
+    textAlign: 'center',
+    lineHeight: 21,
+  },
+  noKeyCode: { fontFamily: MF.semiBold, color: MC.ink },
 
   // Error
   errorCard: {
