@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(Receive-Job *)",
+      "PowerShell(node -e \"const http = require\\('http'\\); const req = http.get\\('http://localhost:8082', \\(res\\) => { console.log\\('Status:', res.statusCode\\); }\\); req.on\\('error', \\(e\\) => console.log\\('Error:', e.message\\)\\); req.setTimeout\\(5000, \\(\\) => { console.log\\('Timeout'\\); req.destroy\\(\\); }\\);\")",
+      "PowerShell($job = Start-Job -ScriptBlock { Set-Location \"C:\\\\Users\\\\user\\\\Downloads\\\\money-app2\"; npx expo start --web --port 8082 --no-open 2>&1 }; Write-Output \"Job started: $\\($job.Id\\)\")",
+      "PowerShell(Start-Process -FilePath \"cmd.exe\" -ArgumentList \"/c\", \"cd /d C:\\\\Users\\\\user\\\\Downloads\\\\money-app2 && npx expo start --web --port 8083 --no-open > C:\\\\Users\\\\user\\\\AppData\\\\Local\\\\Temp\\\\expo-server.log 2>&1\" -WindowStyle Hidden; Write-Output \"Process started\")",
+      "PowerShell($resp = Invoke-WebRequest -Uri \"http://localhost:8081\" -TimeoutSec 10 -UseBasicParsing; Write-Output \"Status: $\\($resp.StatusCode\\)\"; $resp.Content.Substring\\(0, [Math]::Min\\(500, $resp.Content.Length\\)\\))",
+      "PowerShell($process = Get-NetTCPConnection -LocalPort 8081 -State Listen -ErrorAction SilentlyContinue; if \\($process\\) { $pid = $process.OwningProcess; Get-Process -Id $pid | Select-Object Id, Name, MainWindowTitle })",
+      "PowerShell(Get-Process *)",
+      "PowerShell(Stop-Process *)",
+      "PowerShell(Start-Process -FilePath \"cmd.exe\" -ArgumentList \"/c\", \"cd /d C:\\\\Users\\\\user\\\\Downloads\\\\money-app2 && npx expo start --web > C:\\\\Users\\\\user\\\\AppData\\\\Local\\\\Temp\\\\expo-web2.log 2>&1\" -WindowStyle Hidden; Write-Output \"Server starting...\")",
+      "PowerShell($result = Invoke-WebRequest -Uri \"http://localhost:8081/\" -TimeoutSec 30 -UseBasicParsing; Write-Output \"Status: $\\($result.StatusCode\\)\"; $result.Content.Substring\\(0, 300\\))",
+      "Bash(node verify_income.mjs)",
+      "Bash(node verify_goal.mjs)"
+    ]
+  }
+}
