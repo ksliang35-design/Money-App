@@ -1,56 +1,39 @@
-# Welcome to your Expo app 👋
+# Money App
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+A personal finance dashboard built with Expo (React Native) that works on iOS, Android, and web.
 
-## Get started
+## Features
 
-1. Install dependencies
+- **Dashboard** — monthly snapshot with net savings, income split, spending by payment method, and savings history chart
+- **Expenses** — view, add, edit, and delete expenses; filter by payment method (card, e-wallet, cash, bank transfer)
+- **Invest & Goals** — track savings goals with progress bars and projected completion time; add, edit, and delete goals with a custom icon picker
+- **Profile** — manage income streams (salary + side hustles); view independence goal tracker; reset all data to demo defaults
 
-   ```bash
-   npm install
-   ```
+All data is stored on-device with AsyncStorage and persists across sessions.
 
-2. Start the app
+## Tech Stack
 
-   ```bash
-   npx expo start
-   ```
+- [Expo](https://expo.dev) SDK 56
+- [expo-router](https://expo.github.io/router) for file-based navigation
+- React Native + React Native Web
+- `@react-native-async-storage/async-storage` for persistence
+- React Context for global state
+- Plus Jakarta Sans via `@expo-google-fonts`
 
-In the output, you'll find options to open the app in a
-
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
-
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
+## Getting Started
 
 ```bash
-npm run reset-project
+npm install
+npx expo start
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+Press `w` to open in the browser, or scan the QR code with Expo Go on your phone.
 
-### Other setup steps
+## Scripts
 
-- To set up ESLint for linting, run `npx expo lint`, or follow our guide on ["Using ESLint and Prettier"](https://docs.expo.dev/guides/using-eslint/)
-- If you'd like to set up unit testing, follow our guide on ["Unit Testing with Jest"](https://docs.expo.dev/develop/unit-testing/)
-- Learn more about the TypeScript setup in this template in our guide on ["Using TypeScript"](https://docs.expo.dev/guides/typescript/)
-
-## Learn more
-
-To learn more about developing your project with Expo, look at the following resources:
-
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
-
-## Join the community
-
-Join our community of developers creating universal apps.
-
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+| Command | Description |
+|---|---|
+| `npm start` | Start the Expo dev server |
+| `npm run web` | Start and open in browser |
+| `npm run android` | Open on Android emulator/device |
+| `npm run ios` | Open on iOS simulator/device |
