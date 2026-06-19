@@ -8,7 +8,9 @@
     "scheme": "moneyapp",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "icon": "./assets/expo.icon"
+      "icon": "./assets/images/icon.png",
+      "bundleIdentifier": "com.oneplayer.moneyapp",
+      "supportsTablet": false
     },
     "android": {
       "adaptiveIcon": {

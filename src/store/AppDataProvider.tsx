@@ -3,6 +3,7 @@ import { createContext, useContext, useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 
 import { MOCK, type Expense, type Goal, type Income, type HistoryEntry } from '@/constants/mock-data';
+import type { CoachProfile, CoachPlan } from '@/lib/coach';
 
 const STORAGE_KEY = 'money-hub-data';
 
@@ -13,6 +14,8 @@ interface RawData {
   expenses: Expense[];
   goals: Goal[];
   history: HistoryEntry[];
+  coachProfile: CoachProfile | null;
+  coachPlan: CoachPlan | null;
 }
 
 export interface DerivedData extends RawData {
@@ -38,6 +41,8 @@ interface AppDataContextValue {
   addGoal: (goal: Omit<Goal, 'id'>) => void;
   deleteGoal: (id: string) => void;
   resetData: () => void;
+  saveCoachResult: (profile: CoachProfile, plan: CoachPlan) => void;
+  clearCoachResult: () => void;
 }
 
 const defaultRaw: RawData = {
@@ -47,6 +52,8 @@ const defaultRaw: RawData = {
   expenses: MOCK.expenses,
   goals: MOCK.goals,
   history: MOCK.history,
+  coachProfile: null,
+  coachPlan: null,
 };
 
 function derive(raw: RawData): DerivedData {
@@ -80,7 +87,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     AsyncStorage.getItem(STORAGE_KEY).then((json) => {
       if (json) {
         try {
-          setRaw(JSON.parse(json));
+          setRaw({ ...defaultRaw, ...JSON.parse(json) });
         } catch {}
       }
       setLoaded(true);
@@ -137,6 +144,11 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       setRaw((r) => ({ ...r, goals: r.goals.filter((g) => g.id !== id) })),
 
     resetData: () => setRaw(defaultRaw),
+
+    saveCoachResult: (profile, plan) =>
+      setRaw((r) => ({ ...r, coachProfile: profile, coachPlan: plan })),
+    clearCoachResult: () =>
+      setRaw((r) => ({ ...r, coachProfile: null, coachPlan: null })),
   };
 
   return <AppDataContext.Provider value={value}>{children}</AppDataContext.Provider>;
