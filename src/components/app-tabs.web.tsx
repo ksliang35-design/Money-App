@@ -8,8 +8,11 @@ import { useT } from '@/i18n';
 export default function AppTabs() {
   const t = useT();
   const TABS = [
-    { name: 'home', href: '/', icon: '⊞', label: t('tabs.home') },
-    { name: 'expenses', href: '/expenses', icon: '💸', label: t('tabs.expenses') },
+    { name: 'home',     href: '/',        icon: '⊞',  label: t('tabs.home')     },
+    { name: 'expenses', href: '/expenses', icon: '💸',  label: t('tabs.expenses') },
+    { name: 'invest',   href: '/invest',   icon: '📈',  label: t('tabs.invest')   },
+    { name: 'coach',    href: '/coach',    icon: '🧭',  label: t('tabs.coach')    },
+    { name: 'profile',  href: '/profile',  icon: '👤',  label: t('tabs.profile')  },
   ];
   return (
     <Tabs style={styles.root}>
@@ -23,10 +26,6 @@ export default function AppTabs() {
           ))}
         </BottomBar>
       </TabList>
-      {/* Register non-tab screens so expo-router/ui doesn't auto-add them to the tab bar */}
-      <TabTrigger name="invest" href="/invest" />
-      <TabTrigger name="coach" href="/coach" />
-      <TabTrigger name="profile" href="/profile" />
     </Tabs>
   );
 }

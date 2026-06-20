@@ -4,15 +4,17 @@ import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { LanguagePicker } from '@/components/language-picker';
 import { MoneyAIOverlay } from '@/components/money-ai-overlay';
 import { MC, MF, MR, MS, fmt } from '@/constants/money-theme';
-import { useT } from '@/i18n';
+import { useT, type Language } from '@/i18n';
 import { useAppData } from '@/store/AppDataProvider';
 
 export default function DashboardScreen() {
   const insets = useSafeAreaInsets();
   const [aiOpen, setAiOpen] = useState(false);
-  const { data } = useAppData();
+  const [langOpen, setLangOpen] = useState(false);
+  const { data, setLanguage } = useAppData();
   const t = useT();
 
   const maxHistNet = Math.max(...data.history.map((h) => h.net), 1);
@@ -59,9 +61,14 @@ export default function DashboardScreen() {
               <Text style={styles.month}>{data.month}</Text>
             </View>
           </View>
-          <Pressable style={styles.horseBadge} onPress={() => setAiOpen(true)}>
-            <Text style={styles.horseGlyph}>♞</Text>
-          </Pressable>
+          <View style={styles.headerBtns}>
+            <Pressable style={styles.langBadge} onPress={() => setLangOpen(true)}>
+              <Text style={styles.langGlyph}>🌐</Text>
+            </Pressable>
+            <Pressable style={styles.horseBadge} onPress={() => setAiOpen(true)}>
+              <Text style={styles.horseGlyph}>♞</Text>
+            </Pressable>
+          </View>
         </View>
 
         {/* Hero card */}
@@ -197,6 +204,13 @@ export default function DashboardScreen() {
       </ScrollView>
 
       <MoneyAIOverlay visible={aiOpen} onClose={() => setAiOpen(false)} />
+      {langOpen && (
+        <LanguagePicker
+          current={(data.language as Language) ?? 'en'}
+          onSelect={(l) => { setLanguage(l); setLangOpen(false); }}
+          onClose={() => setLangOpen(false)}
+        />
+      )}
     </View>
   );
 }
@@ -280,6 +294,22 @@ const styles = StyleSheet.create({
   greeting: { fontSize: 17, fontFamily: MF.bold, color: MC.ink },
   month: { fontSize: 12, fontFamily: MF.regular, color: MC.muted, marginTop: 1 },
 
+  headerBtns: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: MS.sm,
+  },
+  langBadge: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: MC.card,
+    borderWidth: 1,
+    borderColor: MC.line,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  langGlyph: { fontSize: 20 },
   horseBadge: {
     width: 48,
     height: 48,
