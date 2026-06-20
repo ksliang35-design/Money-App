@@ -2,7 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createContext, useContext, useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 
-import { MOCK, type Expense, type Goal, type Holding, type Income, type HistoryEntry } from '@/constants/mock-data';
+import { MOCK, type Expense, type Goal, type Holding, type Income, type HistoryEntry, type Note } from '@/constants/mock-data';
 import type { CoachProfile, CoachPlan } from '@/lib/coach';
 import type { Language } from '@/i18n';
 
@@ -15,6 +15,7 @@ interface RawData {
   expenses: Expense[];
   goals: Goal[];
   holdings: Holding[];
+  notes: Note[];
   history: HistoryEntry[];
   coachProfile: CoachProfile | null;
   coachPlan: CoachPlan | null;
@@ -48,6 +49,9 @@ interface AppDataContextValue {
   updateHolding: (id: string, updates: Partial<Omit<Holding, 'id'>>) => void;
   addHolding: (holding: Omit<Holding, 'id'>) => void;
   deleteHolding: (id: string) => void;
+  updateNote: (id: string, updates: Partial<Omit<Note, 'id'>>) => void;
+  addNote: (note: Omit<Note, 'id'>) => void;
+  deleteNote: (id: string) => void;
   resetData: () => void;
   saveCoachResult: (profile: CoachProfile, plan: CoachPlan) => void;
   clearCoachResult: () => void;
@@ -61,6 +65,7 @@ const defaultRaw: RawData = {
   expenses: MOCK.expenses,
   goals: MOCK.goals,
   holdings: MOCK.holdings,
+  notes: MOCK.notes,
   history: MOCK.history,
   coachProfile: null,
   coachPlan: null,
@@ -168,6 +173,19 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       })),
     deleteHolding: (id) =>
       setRaw((r) => ({ ...r, holdings: r.holdings.filter((h) => h.id !== id) })),
+
+    updateNote: (id, updates) =>
+      setRaw((r) => ({
+        ...r,
+        notes: r.notes.map((n) => (n.id === id ? { ...n, ...updates } : n)),
+      })),
+    addNote: (note) =>
+      setRaw((r) => ({
+        ...r,
+        notes: [{ ...note, id: nextId('no') }, ...r.notes],
+      })),
+    deleteNote: (id) =>
+      setRaw((r) => ({ ...r, notes: r.notes.filter((n) => n.id !== id) })),
 
     resetData: () => setRaw(defaultRaw),
 

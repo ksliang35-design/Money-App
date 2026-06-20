@@ -1,5 +1,15 @@
 export type AssetType = 'Stocks' | 'ETF' | 'Crypto' | 'Gold' | 'Cash' | 'Other';
 
+export type NoteTag = 'owed_to_me' | 'i_owe' | 'to_claim' | 'reminder' | 'general';
+
+export interface Note {
+  id: string;
+  text: string;
+  createdAt: string; // ISO date 'YYYY-MM-DD'
+  amount: number | null;
+  tag: NoteTag | null;
+}
+
 export interface Holding {
   id: string;
   name: string;
@@ -53,6 +63,12 @@ export const MOCK = {
     { month: 'May', net: 1700 },
     { month: 'Jun', net: 2050 },
   ],
+
+  notes: [
+    { id: 'no1', text: 'Ahmad owes me for dinner split at Pavilion', createdAt: '2026-06-10', amount: 45, tag: 'owed_to_me' as NoteTag },
+    { id: 'no2', text: 'Claim medical bills from Great Eastern insurance', createdAt: '2026-06-14', amount: 320, tag: 'to_claim' as NoteTag },
+    { id: 'no3', text: 'Transfer parking reimbursement to office account', createdAt: '2026-06-18', amount: null, tag: 'reminder' as NoteTag },
+  ] as Note[],
 
   holdings: [
     { id: 'h1', name: 'Maybank', assetType: 'Stocks' as AssetType, units: 500, buyPrice: 8.5, currentValue: 4500 },

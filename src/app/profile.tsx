@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { IncomeEditModal, type IncomeModalMode } from '@/components/income-edit-modal';
 import { LanguagePicker } from '@/components/language-picker';
+import { NotesScreen } from '@/components/notes-screen';
 import { MC, MF, MR, MS, fmt } from '@/constants/money-theme';
 import { useT } from '@/i18n';
 import type { Language } from '@/i18n';
@@ -16,6 +17,7 @@ export default function ProfileScreen() {
   const t = useT();
   const [modalMode, setModalMode] = useState<IncomeModalMode>(null);
   const [langPickerOpen, setLangPickerOpen] = useState(false);
+  const [notesOpen, setNotesOpen] = useState(false);
 
   const handleReset = () => {
     if (Platform.OS === 'web') {
@@ -118,6 +120,15 @@ export default function ProfileScreen() {
           </Text>
         </View>
 
+        {/* Notes row */}
+        <Pressable style={styles.langRow} onPress={() => setNotesOpen(true)}>
+          <Text style={styles.langLabel}>{t('notes.notesRow')}</Text>
+          <View style={styles.langRight}>
+            <Text style={styles.langValue}>{(data.notes ?? []).length}</Text>
+            <Text style={styles.langArrow}>›</Text>
+          </View>
+        </Pressable>
+
         {/* Language row */}
         <Pressable style={styles.langRow} onPress={() => setLangPickerOpen(true)}>
           <Text style={styles.langLabel}>{t('profile.language')}</Text>
@@ -154,6 +165,7 @@ export default function ProfileScreen() {
         mode={modalMode}
         onClose={() => setModalMode(null)}
       />
+      <NotesScreen visible={notesOpen} onClose={() => setNotesOpen(false)} />
     </View>
   );
 }
