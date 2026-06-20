@@ -80,6 +80,7 @@ export function MoneyAIOverlay({ visible, onClose }: Props) {
           net: data.net,
           savingsRate: data.savingsRate,
           byMethod: data.byMethod,
+          byCategory: data.byCategory,
         },
         goalsText,
         history,

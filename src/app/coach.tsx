@@ -68,6 +68,7 @@ export default function CoachScreen() {
           net: data.net,
           savingsRate: data.savingsRate,
           byMethod: data.byMethod,
+          byCategory: data.byCategory,
         },
       );
       setPlan(result);

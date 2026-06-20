@@ -10,6 +10,7 @@ export interface CoachFinancials {
   net: number;
   savingsRate: number;
   byMethod: { card: number; ewallet: number; cash: number; bank: number };
+  byCategory?: Record<string, number>; // food, transport, shopping, bills, entertainment, health, education, other
 }
 
 export interface BudgetBucket {
@@ -33,6 +34,11 @@ Choose the single best-fit budgeting model for this person from:
 - "80/20": 80% Living, 20% Savings — simple, suits lower-to-mid incomes or debt-clearing goals
 - "70/20/10": 70% Living, 20% Savings, 10% Debt/Giving — good when debt repayment or giving is a priority
 - "30/30/40": 30% Housing, 30% Lifestyle, 40% Savings+Investments — suits higher earners building wealth
+- "60/20/20": 60% Needs, 20% Wants, 20% Savings — for high cost-of-living areas (KL/PJ) where rent alone exceeds 40% of income; more realistic than 50/30/20 for city renters
+- "75/15/10": 75% Living, 15% Savings, 10% Giving — for those with charitable obligations: zakat, tithe, or regular family giving
+- "Debt-Clearance": 50% Living, 30% Debt Repayment, 20% Emergency Buffer — best when actively clearing significant debt (PTPTN, car loan, credit card)
+- "JARS": 55% Necessities, 10% Long-term Savings, 10% Education, 10% Play, 10% Financial Freedom, 5% Give — intentional 6-bucket system for holistic wealth-building; choose when user wants clear purpose for every ringgit
+- "Reverse Budget": Pay yourself first — Save First (you set the %), Fixed Commitments, Discretionary; choose for disciplined savers who want one savings target enforced and don't want to micro-manage every category
 
 Return ONLY valid JSON — no markdown fences, no text outside the JSON object:
 
@@ -49,9 +55,35 @@ Return ONLY valid JSON — no markdown fences, no text outside the JSON object:
 }
 
 Rules:
-- Bucket labels must exactly match the chosen model's categories (e.g. 50/30/20 → Needs, Wants, Savings)
-- targetRM values must sum to the user's monthly income
-- For actualRM: savings bucket = net (income minus total expenses); distribute total expenses across the remaining buckets using the spending method breakdown as a guide — card/bank transfers tend to be Needs, e-wallet/cash can be Wants`;
+- Bucket labels must exactly match the chosen model's categories:
+    50/30/20 → Needs, Wants, Savings
+    80/20 → Living, Savings
+    70/20/10 → Living, Savings, Debt & Giving
+    30/30/40 → Housing, Lifestyle, Savings & Investments
+    60/20/20 → Needs, Wants, Savings
+    75/15/10 → Living, Savings, Giving
+    Debt-Clearance → Living, Debt Repayment, Emergency Buffer
+    JARS → Necessities, Long-term Savings, Education, Play, Financial Freedom, Give
+    Reverse Budget → Save First, Fixed Commitments, Discretionary
+- targetRM values must sum exactly to the user's monthly income
+- For Reverse Budget: set Save First target based on goal (Build savings → 20%, Start investing → 25–30%, Just get organized → match current savingsRate or suggest a round number); Fixed Commitments and Discretionary split the remainder
+- For JARS: all 6 bucket targetRM values must sum to income (55+10+10+10+10+5 = 100%)
+- For actualRM distribution:
+    Savings / Save First / Emergency Buffer / Financial Freedom / Long-term Savings bucket → use net (income minus total expenses)
+    If spending by category is provided, distribute expenses across non-savings buckets using category totals:
+      Needs / Necessities / Living / Fixed Commitments ← bills + transport + health + food + other categories
+      Wants / Play / Discretionary ← shopping + entertainment categories
+      Education bucket ← education category
+      Giving / Give bucket ← not directly tracked; set actualRM to 0 and mention in nextAction
+      Debt Repayment ← not directly tracked; set actualRM to 0 and mention in nextAction
+    If only payment method data is available, fall back to: bank transfers → Needs/Living; e-wallet/cash → Wants/Discretionary`;
+
+function formatCategory(byCategory: Record<string, number>): string {
+  const cats = ['food', 'transport', 'shopping', 'bills', 'entertainment', 'health', 'education', 'other'];
+  return cats
+    .map((c) => `${c.charAt(0).toUpperCase() + c.slice(1)} RM ${(byCategory[c] ?? 0).toLocaleString('en-MY')}`)
+    .join(', ');
+}
 
 export async function getCoachPlan(
   profile: CoachProfile,
@@ -59,6 +91,10 @@ export async function getCoachPlan(
 ): Promise<CoachPlan> {
   const apiKey = process.env.EXPO_PUBLIC_GEMINI_API_KEY;
   if (!apiKey) throw new Error('NO_API_KEY');
+
+  const categoryLine = financials.byCategory
+    ? `\n- Spending by category: ${formatCategory(financials.byCategory)}`
+    : '';
 
   const fullPrompt = `${SYSTEM_PROMPT}
 
@@ -72,7 +108,7 @@ This month's numbers:
 - Total expenses: RM ${financials.expense.toLocaleString('en-MY')}
 - Net savings: RM ${financials.net.toLocaleString('en-MY')}
 - Savings rate: ${financials.savingsRate}%
-- Spending by method: Card RM ${financials.byMethod.card.toLocaleString('en-MY')}, E-wallet RM ${financials.byMethod.ewallet.toLocaleString('en-MY')}, Cash RM ${financials.byMethod.cash.toLocaleString('en-MY')}, Bank transfer RM ${financials.byMethod.bank.toLocaleString('en-MY')}
+- Spending by method: Card RM ${financials.byMethod.card.toLocaleString('en-MY')}, E-wallet RM ${financials.byMethod.ewallet.toLocaleString('en-MY')}, Cash RM ${financials.byMethod.cash.toLocaleString('en-MY')}, Bank transfer RM ${financials.byMethod.bank.toLocaleString('en-MY')}${categoryLine}
 
 Give me a personalised budgeting plan.`;
 
@@ -121,6 +157,10 @@ export async function getAIReply(
   const apiKey = process.env.EXPO_PUBLIC_GEMINI_API_KEY;
   if (!apiKey) throw new Error('NO_API_KEY');
 
+  const categoryLine = financials.byCategory
+    ? `\n- Categories: ${formatCategory(financials.byCategory)}`
+    : '';
+
   const systemText = `You are a careful, helpful money assistant for ${name}, a user in Malaysia. All amounts are in Malaysian Ringgit (RM).
 
 Rules:
@@ -134,7 +174,7 @@ Current finances this month:
 - Income: RM ${financials.income.toLocaleString('en-MY')}
 - Expenses: RM ${financials.expense.toLocaleString('en-MY')}
 - Net savings: RM ${financials.net.toLocaleString('en-MY')} (${financials.savingsRate}% savings rate)
-- Spending: Card RM ${financials.byMethod.card.toLocaleString('en-MY')}, E-wallet RM ${financials.byMethod.ewallet.toLocaleString('en-MY')}, Cash RM ${financials.byMethod.cash.toLocaleString('en-MY')}, Bank RM ${financials.byMethod.bank.toLocaleString('en-MY')}
+- Spending: Card RM ${financials.byMethod.card.toLocaleString('en-MY')}, E-wallet RM ${financials.byMethod.ewallet.toLocaleString('en-MY')}, Cash RM ${financials.byMethod.cash.toLocaleString('en-MY')}, Bank RM ${financials.byMethod.bank.toLocaleString('en-MY')}${categoryLine}
 - Goals: ${goalsText}
 
 Return ONLY valid JSON — no markdown fences, no extra text:
