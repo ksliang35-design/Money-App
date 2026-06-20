@@ -27,6 +27,24 @@ export interface CoachPlan {
   encouragement: string;
 }
 
+export interface ModelOption {
+  model: string;
+  split: Record<string, number>;
+  bestFor: string;
+  why: string;
+}
+
+export interface ModelOptions {
+  recommended: string;
+  options: ModelOption[];
+}
+
+const LANG_NAMES: Record<string, string> = {
+  en: 'English',
+  ms: 'Malay (Bahasa Malaysia)',
+  zh: 'Simplified Chinese (中文)',
+};
+
 const SYSTEM_PROMPT = `You are a careful, friendly money coach for users in Malaysia. All amounts are in Malaysian Ringgit (RM). You give general guidance only — you are NOT a licensed financial advisor. Never recommend specific stocks, crypto, or investment products.
 
 Choose the single best-fit budgeting model for this person from:
@@ -217,4 +235,94 @@ Return ONLY valid JSON — no markdown fences, no extra text:
   }
 
   return { text: text.trim() || 'Sorry, I had trouble with that. Please try again.', action: null };
+}
+
+// ── Model options picker ──────────────────────────────────────────────────────
+
+const OPTIONS_PROMPT = (langName: string) =>
+  `You are a careful, friendly money coach for users in Malaysia. All amounts are in Malaysian Ringgit (RM). You give general guidance only — NOT licensed financial advice.
+
+Choose 2-3 budgeting models from this list that best suit this person:
+- "50/30/20": 50% Needs, 30% Wants, 20% Savings — best all-rounder
+- "80/20": 80% Living, 20% Savings — simple, suits lower-mid incomes
+- "70/20/10": 70% Living, 20% Savings, 10% Debt & Giving
+- "30/30/40": 30% Housing, 30% Lifestyle, 40% Savings & Investments — higher earners
+- "60/20/20": 60% Needs, 20% Wants, 20% Savings — high cost-of-living (KL/PJ)
+- "75/15/10": 75% Living, 15% Savings, 10% Giving — for regular givers (zakat/tithe)
+- "Debt-Clearance": 50% Living, 30% Debt Repayment, 20% Emergency Buffer
+- "JARS": 55% Necessities, 10% Long-term Savings, 10% Education, 10% Play, 10% Financial Freedom, 5% Give
+- "Reverse Budget": flexible — Save First, Fixed Commitments, Discretionary
+
+Write ALL "bestFor" and "why" values in: ${langName}
+
+Return ONLY valid JSON — no markdown fences, no text outside the JSON:
+
+{
+  "recommended": "50/30/20",
+  "options": [
+    {
+      "model": "50/30/20",
+      "split": {"Needs": 50, "Wants": 30, "Savings": 20},
+      "bestFor": "one concise phrase, max 10 words",
+      "why": "1-2 sentences specific to this user's age, income, and goal."
+    }
+  ]
+}
+
+Rules:
+- Return 2 or 3 options total; list the recommended one first
+- The "recommended" key must exactly match the first option's "model" value
+- Keep "model" values in English exactly as listed above
+- "split" key names are English bucket labels; values are integers summing to 100
+  JARS split: {"Necessities":55,"Long-term Savings":10,"Education":10,"Play":10,"Financial Freedom":10,"Give":5}
+  Reverse Budget: adjust "Save First" % to match the user's goal; Fixed Commitments + Discretionary fill the rest
+- "bestFor" and "why" must be written in ${langName}`;
+
+export async function getModelOptions(
+  profile: CoachProfile,
+  financials: CoachFinancials,
+  language = 'en',
+): Promise<ModelOptions> {
+  const apiKey = process.env.EXPO_PUBLIC_GEMINI_API_KEY;
+  if (!apiKey) throw new Error('NO_API_KEY');
+
+  const langName = LANG_NAMES[language] ?? 'English';
+  const categoryLine = financials.byCategory
+    ? `\n- Spending by category: ${formatCategory(financials.byCategory)}`
+    : '';
+
+  const prompt = `${OPTIONS_PROMPT(langName)}
+
+User profile:
+- Age range: ${profile.age}
+- Monthly income bracket: ${profile.incomeBracket}
+- Main financial goal: ${profile.goal}
+- Monthly income: RM ${financials.income.toLocaleString('en-MY')}
+- Total expenses: RM ${financials.expense.toLocaleString('en-MY')}
+- Savings rate: ${financials.savingsRate}%
+- Spending by method: Card RM ${financials.byMethod.card.toLocaleString('en-MY')}, E-wallet RM ${financials.byMethod.ewallet.toLocaleString('en-MY')}, Cash RM ${financials.byMethod.cash.toLocaleString('en-MY')}, Bank RM ${financials.byMethod.bank.toLocaleString('en-MY')}${categoryLine}`;
+
+  const res = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
+    {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }),
+    },
+  );
+
+  if (!res.ok) {
+    const body = await res.text().catch(() => '');
+    throw new Error(`Gemini error ${res.status}${body ? `: ${body.slice(0, 200)}` : ''}`);
+  }
+
+  const json = await res.json();
+  const parts: Array<{ text?: string; thought?: boolean }> = json.candidates?.[0]?.content?.parts ?? [];
+  const text: string = (parts.find((p) => !p.thought) ?? parts[0])?.text ?? '';
+
+  const start = text.indexOf('{');
+  const end = text.lastIndexOf('}');
+  if (start === -1 || end <= start) throw new Error('No JSON found in Gemini response');
+
+  return JSON.parse(text.slice(start, end + 1)) as ModelOptions;
 }

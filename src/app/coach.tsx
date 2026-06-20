@@ -1,14 +1,18 @@
-import { LinearGradient } from 'expo-linear-gradient';
 import { useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { MC, MF, MR, MS, fmt } from '@/constants/money-theme';
-import { getCoachPlan, type CoachPlan } from '@/lib/coach';
+import {
+  getModelOptions,
+  type CoachPlan,
+  type ModelOption,
+  type ModelOptions,
+} from '@/lib/coach';
 import { useT } from '@/i18n';
 import { useAppData } from '@/store/AppDataProvider';
 
-type Step = 1 | 2 | 3 | 'done';
+type Step = 1 | 2 | 3 | 'pick' | 'done';
 
 interface Answers {
   age: string | null;
@@ -50,17 +54,19 @@ export default function CoachScreen() {
     data.coachProfile ?? { age: null, incomeBracket: null, goal: null },
   );
   const [plan, setPlan] = useState<CoachPlan | null>(data.coachPlan ?? null);
+  const [options, setOptions] = useState<ModelOptions | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const suggestedBracket = incomeToBracket(data.income);
 
-  const fetchPlan = async (a: { age: string; incomeBracket: string; goal: string }) => {
+  const fetchOptions = async (a: { age: string; incomeBracket: string; goal: string }) => {
     setLoading(true);
     setError(null);
-    setPlan(null);
+    setOptions(null);
+    setStep('pick');
     try {
-      const result = await getCoachPlan(
+      const result = await getModelOptions(
         { age: a.age, incomeBracket: a.incomeBracket, goal: a.goal },
         {
           income: data.income,
@@ -70,9 +76,9 @@ export default function CoachScreen() {
           byMethod: data.byMethod,
           byCategory: data.byCategory,
         },
+        data.language ?? 'en',
       );
-      setPlan(result);
-      saveCoachResult({ age: a.age, incomeBracket: a.incomeBracket, goal: a.goal }, result);
+      setOptions(result);
     } catch (e: any) {
       setError(e?.message ?? 'Something went wrong. Please try again.');
     } finally {
@@ -83,23 +89,55 @@ export default function CoachScreen() {
   const handleGoal = (value: string) => {
     const finalAnswers = { age: answers.age!, incomeBracket: answers.incomeBracket!, goal: value };
     setAnswers((a) => ({ ...a, goal: value }));
+    fetchOptions(finalAnswers);
+  };
+
+  const handleSelectModel = (opt: ModelOption) => {
+    const chosen: CoachPlan = {
+      model: opt.model,
+      why: opt.why,
+      buckets: [],   // Step 2 will populate this
+      nextAction: '',
+      encouragement: '',
+    };
+    setPlan(chosen);
+    saveCoachResult(
+      { age: answers.age!, incomeBracket: answers.incomeBracket!, goal: answers.goal! },
+      chosen,
+    );
     setStep('done');
-    fetchPlan(finalAnswers);
   };
 
   const handleRetry = () => {
     if (!answers.age || !answers.incomeBracket || !answers.goal) return;
-    fetchPlan({ age: answers.age, incomeBracket: answers.incomeBracket, goal: answers.goal });
+    fetchOptions({ age: answers.age, incomeBracket: answers.incomeBracket, goal: answers.goal });
   };
 
   const handleRestart = () => {
     setStep(1);
     setAnswers({ age: null, incomeBracket: null, goal: null });
     setPlan(null);
+    setOptions(null);
     setError(null);
     setLoading(false);
     clearCoachResult();
   };
+
+  const profileRecap = (
+    <View style={styles.summaryCard}>
+      <Text style={styles.summaryTitle}>{t('coach.yourProfile')}</Text>
+      {[
+        { key: t('coach.ageRange'), val: answers.age },
+        { key: t('coach.incomeBracket'), val: answers.incomeBracket },
+        { key: t('coach.mainGoal'), val: answers.goal },
+      ].map((row) => (
+        <View key={row.key} style={styles.summaryRow}>
+          <Text style={styles.summaryKey}>{row.key}</Text>
+          <Text style={styles.summaryVal}>{row.val}</Text>
+        </View>
+      ))}
+    </View>
+  );
 
   return (
     <View style={styles.root}>
@@ -112,7 +150,7 @@ export default function CoachScreen() {
         <Text style={styles.screenSub}>{t('coach.sub')}</Text>
 
         {/* Step progress bar */}
-        {step !== 'done' && (
+        {(step === 1 || step === 2 || step === 3) && (
           <View style={styles.progressRow}>
             {[1, 2, 3].map((n) => (
               <View
@@ -206,25 +244,11 @@ export default function CoachScreen() {
           </View>
         )}
 
-        {/* Done state */}
-        {step === 'done' && (
+        {/* Pick step: Gemini returns options, user selects one */}
+        {step === 'pick' && (
           <>
-            {/* Answers recap */}
-            <View style={styles.summaryCard}>
-              <Text style={styles.summaryTitle}>{t('coach.yourProfile')}</Text>
-              {[
-                { key: t('coach.ageRange'), val: answers.age },
-                { key: t('coach.incomeBracket'), val: answers.incomeBracket },
-                { key: t('coach.mainGoal'), val: answers.goal },
-              ].map((row) => (
-                <View key={row.key} style={styles.summaryRow}>
-                  <Text style={styles.summaryKey}>{row.key}</Text>
-                  <Text style={styles.summaryVal}>{row.val}</Text>
-                </View>
-              ))}
-            </View>
+            {profileRecap}
 
-            {/* Loading */}
             {loading && (
               <View style={styles.loadingCard}>
                 <ActivityIndicator size="large" color={MC.indigo} />
@@ -232,7 +256,6 @@ export default function CoachScreen() {
               </View>
             )}
 
-            {/* Error */}
             {!loading && error === 'NO_API_KEY' && (
               <View style={styles.noKeyCard}>
                 <Text style={styles.noKeyIcon}>🔑</Text>
@@ -253,76 +276,139 @@ export default function CoachScreen() {
               </View>
             )}
 
-            {/* Plan result */}
-            {!loading && !error && plan && (
+            {!loading && !error && options && (
               <>
-                {/* Model name + why */}
-                <LinearGradient
-                  colors={[MC.indigo, '#4848C0']}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                  style={styles.modelCard}>
-                  <Text style={styles.modelName}>{plan.model}</Text>
-                  <Text style={styles.modelSubLabel}>{t('coach.recBudgetModel')}</Text>
-                  <View style={styles.modelDivider} />
-                  <Text style={styles.modelWhy}>{plan.why}</Text>
-                </LinearGradient>
-
-                {/* Budget breakdown */}
-                <View style={styles.card}>
-                  <Text style={styles.sectionLabel}>{t('coach.budgetBreakdown')}</Text>
-                  {plan.buckets.map((bucket, i) => {
-                    const pct =
-                      bucket.targetRM > 0
-                        ? Math.min(100, Math.round((bucket.actualRM / bucket.targetRM) * 100))
-                        : 0;
-                    const over = bucket.actualRM > bucket.targetRM;
-                    const fillColor = over ? MC.clay : MC.emerald;
-                    return (
-                      <View
-                        key={bucket.label}
-                        style={[
-                          styles.bucketRow,
-                          i < plan.buckets.length - 1 && styles.bucketRowBorder,
-                        ]}>
-                        <View style={styles.bucketHeader}>
-                          <Text style={styles.bucketLabel}>{bucket.label}</Text>
-                          <Text style={[styles.bucketStatus, { color: fillColor }]}>
-                            {over ? t('coach.overBudget') : t('coach.onTrack')}
-                          </Text>
+                <Text style={styles.pickTitle}>{t('coach.pickTitle')}</Text>
+                {options.options.map((opt) => {
+                  const isRec = opt.model === options.recommended;
+                  const splitText = Object.entries(opt.split)
+                    .map(([k, v]) => `${v}% ${k}`)
+                    .join(' · ');
+                  return (
+                    <Pressable
+                      key={opt.model}
+                      onPress={() => handleSelectModel(opt)}
+                      style={({ pressed }) => [
+                        styles.optionCard,
+                        isRec && styles.optionCardRec,
+                        pressed && styles.optionCardPressed,
+                      ]}>
+                      {isRec && (
+                        <View style={styles.recBadge}>
+                          <Text style={styles.recBadgeText}>{t('coach.recommended')}</Text>
                         </View>
-                        <View style={styles.meterBg}>
-                          <View
-                            style={[
-                              styles.meterFill,
-                              { width: `${pct}%` as any, backgroundColor: fillColor },
-                            ]}
-                          />
-                        </View>
-                        <View style={styles.bucketNums}>
-                          <Text style={styles.bucketNum}>
-                            {t('coach.actual')}{' '}
-                            <Text style={{ color: fillColor, fontFamily: MF.bold }}>
-                              {fmt(bucket.actualRM)}
-                            </Text>
-                          </Text>
-                          <Text style={styles.bucketNum}>{t('coach.target2')} {fmt(bucket.targetRM)}</Text>
-                        </View>
+                      )}
+                      <View style={styles.optionHeader}>
+                        <Text style={[styles.optionModelName, isRec && styles.optionModelNameRec]}>
+                          {opt.model}
+                        </Text>
+                        <Text style={styles.optionChevron}>›</Text>
                       </View>
-                    );
-                  })}
+                      <Text style={styles.optionSplit} numberOfLines={2}>{splitText}</Text>
+                      <View style={styles.optionDivider} />
+                      <Text style={styles.optionBestForLabel}>{t('coach.bestFor')}</Text>
+                      <Text style={styles.optionBestFor}>{opt.bestFor}</Text>
+                      <Text style={styles.optionWhy}>{opt.why}</Text>
+                    </Pressable>
+                  );
+                })}
+                <Text style={styles.disclaimer}>{t('coach.disclaimer')}</Text>
+              </>
+            )}
+
+            <Pressable
+              style={({ pressed }) => [styles.restartBtn, pressed && { opacity: 0.6 }]}
+              onPress={handleRestart}>
+              <Text style={styles.restartTxt}>{t('coach.startOver')}</Text>
+            </Pressable>
+          </>
+        )}
+
+        {/* Done state */}
+        {step === 'done' && (
+          <>
+            {profileRecap}
+
+            {!error && plan && (
+              <>
+                {/* Chosen model confirmation */}
+                <View style={styles.chosenCard}>
+                  <Text style={styles.chosenCheck}>✓</Text>
+                  <View style={styles.chosenTextWrap}>
+                    <Text style={styles.chosenModel}>{plan.model}</Text>
+                    <Text style={styles.chosenLabel}>{t('coach.modelChosen')}</Text>
+                  </View>
                 </View>
 
-                {/* Next action */}
-                <View style={[styles.card, styles.actionCard]}>
-                  <Text style={styles.actionBadge}>{t('coach.thisWeek')}</Text>
-                  <Text style={styles.actionText}>{plan.nextAction}</Text>
-                </View>
+                {plan.buckets.length > 0 ? (
+                  <>
+                    {/* Budget breakdown */}
+                    <View style={styles.card}>
+                      <Text style={styles.sectionLabel}>{t('coach.budgetBreakdown')}</Text>
+                      {plan.buckets.map((bucket, i) => {
+                        const pct =
+                          bucket.targetRM > 0
+                            ? Math.min(100, Math.round((bucket.actualRM / bucket.targetRM) * 100))
+                            : 0;
+                        const over = bucket.actualRM > bucket.targetRM;
+                        const fillColor = over ? MC.clay : MC.emerald;
+                        return (
+                          <View
+                            key={bucket.label}
+                            style={[
+                              styles.bucketRow,
+                              i < plan.buckets.length - 1 && styles.bucketRowBorder,
+                            ]}>
+                            <View style={styles.bucketHeader}>
+                              <Text style={styles.bucketLabel}>{bucket.label}</Text>
+                              <Text style={[styles.bucketStatus, { color: fillColor }]}>
+                                {over ? t('coach.overBudget') : t('coach.onTrack')}
+                              </Text>
+                            </View>
+                            <View style={styles.meterBg}>
+                              <View
+                                style={[
+                                  styles.meterFill,
+                                  { width: `${pct}%` as any, backgroundColor: fillColor },
+                                ]}
+                              />
+                            </View>
+                            <View style={styles.bucketNums}>
+                              <Text style={styles.bucketNum}>
+                                {t('coach.actual')}{' '}
+                                <Text style={{ color: fillColor, fontFamily: MF.bold }}>
+                                  {fmt(bucket.actualRM)}
+                                </Text>
+                              </Text>
+                              <Text style={styles.bucketNum}>{t('coach.target2')} {fmt(bucket.targetRM)}</Text>
+                            </View>
+                          </View>
+                        );
+                      })}
+                    </View>
 
-                {/* Encouragement */}
-                <View style={styles.encourageCard}>
-                  <Text style={styles.encourageText}>"{plan.encouragement}"</Text>
-                </View>
+                    {!!plan.nextAction && (
+                      <View style={[styles.card, styles.actionCard]}>
+                        <Text style={styles.actionBadge}>{t('coach.thisWeek')}</Text>
+                        <Text style={styles.actionText}>{plan.nextAction}</Text>
+                      </View>
+                    )}
+
+                    {!!plan.encouragement && (
+                      <View style={styles.encourageCard}>
+                        <Text style={styles.encourageText}>"{plan.encouragement}"</Text>
+                      </View>
+                    )}
+                  </>
+                ) : (
+                  /* Placeholder — Step 2 will add the full personalised breakdown */
+                  <View style={styles.placeholderCard}>
+                    <Text style={styles.placeholderText}>{t('coach.breakdownSoon')}</Text>
+                    {!!plan.why && (
+                      <Text style={styles.placeholderWhy}>{plan.why}</Text>
+                    )}
+                  </View>
+                )}
 
                 <Text style={styles.disclaimer}>{t('coach.disclaimer')}</Text>
               </>
@@ -453,7 +539,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 21,
   },
-  noKeyCode: { fontFamily: MF.semiBold, color: MC.ink },
 
   // Error
   errorCard: {
@@ -483,31 +568,107 @@ const styles = StyleSheet.create({
   },
   retryTxt: { fontSize: 14, fontFamily: MF.semiBold, color: '#fff' },
 
-  // Model card
-  modelCard: {
-    borderRadius: MR.xxl,
-    padding: MS.xl,
-    gap: MS.sm,
-    shadowColor: MC.indigo,
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.3,
-    shadowRadius: 16,
-    elevation: 6,
+  // Pick step
+  pickTitle: {
+    fontSize: 15,
+    fontFamily: MF.semiBold,
+    color: MC.ink,
+    marginBottom: -MS.xs,
   },
-  modelName: { fontSize: 32, fontFamily: MF.bold, color: '#fff' },
-  modelSubLabel: {
-    fontSize: 11,
+  recBadge: {
+    alignSelf: 'flex-start',
+    backgroundColor: MC.emerald + '20',
+    borderWidth: 1,
+    borderColor: MC.emerald,
+    borderRadius: 999,
+    paddingHorizontal: MS.sm,
+    paddingVertical: 3,
+    marginBottom: MS.xs,
+  },
+  recBadgeText: {
+    fontSize: 10,
+    fontFamily: MF.bold,
+    color: MC.emeraldDark,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  optionCard: {
+    backgroundColor: MC.card,
+    borderWidth: 1.5,
+    borderColor: MC.line,
+    borderRadius: MR.xl,
+    padding: MS.lg,
+    gap: MS.sm,
+  },
+  optionCardRec: {
+    borderColor: MC.emerald,
+    borderWidth: 2,
+  },
+  optionCardPressed: {
+    opacity: 0.7,
+    transform: [{ scale: 0.985 }],
+  },
+  optionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  optionModelName: { fontSize: 22, fontFamily: MF.bold, color: MC.ink },
+  optionModelNameRec: { color: MC.emeraldDark },
+  optionChevron: { fontSize: 24, color: MC.muted },
+  optionSplit: {
+    fontSize: 12,
     fontFamily: MF.medium,
-    color: 'rgba(255,255,255,0.65)',
+    color: MC.muted,
+    lineHeight: 18,
+  },
+  optionDivider: { height: 1, backgroundColor: MC.line, marginVertical: MS.xs },
+  optionBestForLabel: {
+    fontSize: 10,
+    fontFamily: MF.bold,
+    color: MC.muted,
     textTransform: 'uppercase',
     letterSpacing: 0.6,
   },
-  modelDivider: { height: 1, backgroundColor: 'rgba(255,255,255,0.2)', marginVertical: MS.xs },
-  modelWhy: {
-    fontSize: 14,
+  optionBestFor: { fontSize: 13, fontFamily: MF.semiBold, color: MC.ink },
+  optionWhy: {
+    fontSize: 13,
     fontFamily: MF.regular,
-    color: 'rgba(255,255,255,0.9)',
-    lineHeight: 22,
+    color: MC.muted,
+    lineHeight: 20,
+  },
+
+  // Chosen model confirmation
+  chosenCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: MS.md,
+    backgroundColor: MC.emerald + '15',
+    borderWidth: 1.5,
+    borderColor: MC.emerald,
+    borderRadius: MR.xl,
+    padding: MS.lg,
+  },
+  chosenCheck: { fontSize: 28, color: MC.emeraldDark },
+  chosenTextWrap: { flex: 1 },
+  chosenModel: { fontSize: 22, fontFamily: MF.bold, color: MC.emeraldDark },
+  chosenLabel: { fontSize: 12, fontFamily: MF.medium, color: MC.muted, marginTop: 2 },
+
+  // Placeholder (Step 2 not yet done)
+  placeholderCard: {
+    backgroundColor: MC.card,
+    borderWidth: 1,
+    borderColor: MC.line,
+    borderRadius: MR.xl,
+    padding: MS.lg,
+    gap: MS.sm,
+  },
+  placeholderText: { fontSize: 14, fontFamily: MF.medium, color: MC.muted },
+  placeholderWhy: {
+    fontSize: 13,
+    fontFamily: MF.regular,
+    color: MC.muted,
+    lineHeight: 20,
   },
 
   // Bucket breakdown
