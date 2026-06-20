@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { createContext, useContext, useEffect, useState } from 'react';
+import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 
 import { MOCK, type Expense, type Goal, type Holding, type Income, type HistoryEntry, type Note } from '@/constants/mock-data';
@@ -7,6 +7,9 @@ import type { CoachProfile, CoachPlan } from '@/lib/coach';
 import type { Language } from '@/i18n';
 
 const STORAGE_KEY = 'money-hub-data';
+
+// Moved outside component — pure function, no closure over state needed
+const nextId = (prefix: string) => `${prefix}${Date.now()}`;
 
 interface RawData {
   name: string;
@@ -81,10 +84,10 @@ function derive(raw: RawData): DerivedData {
     .reduce((s, i) => s + i.amount, 0);
   const income = salary + side;
   const byMethod = {
-    card: raw.expenses.filter((e) => e.method === 'card').reduce((s, e) => s + e.amount, 0),
+    card:    raw.expenses.filter((e) => e.method === 'card').reduce((s, e) => s + e.amount, 0),
     ewallet: raw.expenses.filter((e) => e.method === 'ewallet').reduce((s, e) => s + e.amount, 0),
-    cash: raw.expenses.filter((e) => e.method === 'cash').reduce((s, e) => s + e.amount, 0),
-    bank: raw.expenses.filter((e) => e.method === 'bank').reduce((s, e) => s + e.amount, 0),
+    cash:    raw.expenses.filter((e) => e.method === 'cash').reduce((s, e) => s + e.amount, 0),
+    bank:    raw.expenses.filter((e) => e.method === 'bank').reduce((s, e) => s + e.amount, 0),
   };
   const expense = Object.values(byMethod).reduce((s, v) => s + v, 0);
   const net = income - expense;
@@ -105,7 +108,9 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       if (json) {
         try {
           setRaw({ ...defaultRaw, ...JSON.parse(json) });
-        } catch {}
+        } catch (e) {
+          console.error('[AppDataProvider] Failed to parse stored data:', e);
+        }
       }
       setLoaded(true);
     });
@@ -116,86 +121,90 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(raw));
   }, [raw, loaded]);
 
-  const nextId = (prefix: string) => `${prefix}${Date.now()}`;
-
-  const value: AppDataContextValue = {
-    data: derive(raw),
-    loaded,
-
-    updateExpense: (id, updates) =>
+  // Stable mutation object — setRaw from useState is always the same reference,
+  // so these functions never need to be recreated across renders.
+  const ops = useMemo(() => ({
+    updateExpense: (id: string, updates: Partial<Omit<Expense, 'id'>>) =>
       setRaw((r) => ({
         ...r,
         expenses: r.expenses.map((e) => (e.id === id ? { ...e, ...updates } : e)),
       })),
-    addExpense: (expense) =>
+    addExpense: (expense: Omit<Expense, 'id'>) =>
       setRaw((r) => ({
         ...r,
         expenses: [...r.expenses, { ...expense, id: nextId('e') }],
       })),
-    deleteExpense: (id) =>
+    deleteExpense: (id: string) =>
       setRaw((r) => ({ ...r, expenses: r.expenses.filter((e) => e.id !== id) })),
 
-    updateIncome: (id, updates) =>
+    updateIncome: (id: string, updates: Partial<Omit<Income, 'id'>>) =>
       setRaw((r) => ({
         ...r,
         incomes: r.incomes.map((i) => (i.id === id ? { ...i, ...updates } : i)),
       })),
-    addIncome: (income) =>
+    addIncome: (income: Omit<Income, 'id'>) =>
       setRaw((r) => ({
         ...r,
         incomes: [...r.incomes, { ...income, id: nextId('i') }],
       })),
-    deleteIncome: (id) =>
+    deleteIncome: (id: string) =>
       setRaw((r) => ({ ...r, incomes: r.incomes.filter((i) => i.id !== id) })),
 
-    updateGoal: (id, updates) =>
+    updateGoal: (id: string, updates: Partial<Omit<Goal, 'id'>>) =>
       setRaw((r) => ({
         ...r,
         goals: r.goals.map((g) => (g.id === id ? { ...g, ...updates } : g)),
       })),
-    addGoal: (goal) =>
+    addGoal: (goal: Omit<Goal, 'id'>) =>
       setRaw((r) => ({
         ...r,
         goals: [...r.goals, { ...goal, id: nextId('g') }],
       })),
-    deleteGoal: (id) =>
+    deleteGoal: (id: string) =>
       setRaw((r) => ({ ...r, goals: r.goals.filter((g) => g.id !== id) })),
 
-    updateHolding: (id, updates) =>
+    updateHolding: (id: string, updates: Partial<Omit<Holding, 'id'>>) =>
       setRaw((r) => ({
         ...r,
-        holdings: r.holdings.map((h) => (h.id === id ? { ...h, ...updates } : h)),
+        holdings: (r.holdings ?? []).map((h) => (h.id === id ? { ...h, ...updates } : h)),
       })),
-    addHolding: (holding) =>
+    addHolding: (holding: Omit<Holding, 'id'>) =>
       setRaw((r) => ({
         ...r,
-        holdings: [...r.holdings, { ...holding, id: nextId('h') }],
+        holdings: [...(r.holdings ?? []), { ...holding, id: nextId('h') }],
       })),
-    deleteHolding: (id) =>
-      setRaw((r) => ({ ...r, holdings: r.holdings.filter((h) => h.id !== id) })),
+    deleteHolding: (id: string) =>
+      setRaw((r) => ({ ...r, holdings: (r.holdings ?? []).filter((h) => h.id !== id) })),
 
-    updateNote: (id, updates) =>
+    updateNote: (id: string, updates: Partial<Omit<Note, 'id'>>) =>
       setRaw((r) => ({
         ...r,
-        notes: r.notes.map((n) => (n.id === id ? { ...n, ...updates } : n)),
+        notes: (r.notes ?? []).map((n) => (n.id === id ? { ...n, ...updates } : n)),
       })),
-    addNote: (note) =>
+    addNote: (note: Omit<Note, 'id'>) =>
       setRaw((r) => ({
         ...r,
-        notes: [{ ...note, id: nextId('no') }, ...r.notes],
+        notes: [{ ...note, id: nextId('no') }, ...(r.notes ?? [])],
       })),
-    deleteNote: (id) =>
-      setRaw((r) => ({ ...r, notes: r.notes.filter((n) => n.id !== id) })),
+    deleteNote: (id: string) =>
+      setRaw((r) => ({ ...r, notes: (r.notes ?? []).filter((n) => n.id !== id) })),
 
     resetData: () => setRaw(defaultRaw),
 
-    saveCoachResult: (profile, plan) =>
+    saveCoachResult: (profile: CoachProfile, plan: CoachPlan) =>
       setRaw((r) => ({ ...r, coachProfile: profile, coachPlan: plan })),
     clearCoachResult: () =>
       setRaw((r) => ({ ...r, coachProfile: null, coachPlan: null })),
-    setLanguage: (lang) =>
+    setLanguage: (lang: Language) =>
       setRaw((r) => ({ ...r, language: lang })),
-  };
+  }), []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Re-derive only when raw data or load state actually changes.
+  // Prevents every context consumer from re-rendering on unrelated parent renders.
+  const value = useMemo<AppDataContextValue>(
+    () => ({ data: derive(raw), loaded, ...ops }),
+    [raw, loaded, ops],
+  );
 
   return <AppDataContext.Provider value={value}>{children}</AppDataContext.Provider>;
 }
