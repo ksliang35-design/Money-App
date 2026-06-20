@@ -93,7 +93,9 @@ Give me a personalised budgeting plan.`;
   }
 
   const json = await res.json();
-  const text: string = json.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
+  // Gemini 2.5 Flash returns thinking in parts[0] (thought:true) and content in parts[1]
+  const parts: Array<{ text?: string; thought?: boolean }> = json.candidates?.[0]?.content?.parts ?? [];
+  const text: string = (parts.find((p) => !p.thought) ?? parts[0])?.text ?? '';
 
   const start = text.indexOf('{');
   const end = text.lastIndexOf('}');
@@ -163,7 +165,8 @@ Return ONLY valid JSON — no markdown fences, no extra text:
   }
 
   const json = await res.json();
-  const text: string = json.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
+  const replyParts: Array<{ text?: string; thought?: boolean }> = json.candidates?.[0]?.content?.parts ?? [];
+  const text: string = (replyParts.find((p) => !p.thought) ?? replyParts[0])?.text ?? '';
 
   const start = text.indexOf('{');
   const end = text.lastIndexOf('}');

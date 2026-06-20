@@ -27,9 +27,14 @@ export default function DashboardScreen() {
 
   const initials = data.name.slice(0, 2).toUpperCase();
   const portfolioVal = data.portfolioValue ?? 0;
-  const coachSub = data.coachPlan
-    ? t('dashboard.coachPlanActive')
-    : t('dashboard.coachSub');
+
+  // Gain/loss: only compare holdings where both units and buy price are known
+  const holdings = data.holdings ?? [];
+  const trackedHoldings = holdings.filter(h => h.units != null && h.buyPrice != null);
+  const totalCost = trackedHoldings.reduce((s, h) => s + h.units! * h.buyPrice!, 0);
+  const totalTrackedValue = trackedHoldings.reduce((s, h) => s + h.currentValue, 0);
+  const gainLossPct =
+    totalCost > 0 ? ((totalTrackedValue - totalCost) / totalCost) * 100 : null;
 
   return (
     <View style={styles.root}>
@@ -172,9 +177,16 @@ export default function DashboardScreen() {
             <Text style={styles.hubIcon}>📈</Text>
             <View style={styles.hubBody}>
               <Text style={styles.hubTitle}>{t('dashboard.investTitle')}</Text>
-              <Text style={styles.hubSub}>
-                {t('dashboard.investPreview', { val: fmt(portfolioVal) })}
-              </Text>
+              <View style={styles.hubValRow}>
+                <Text style={styles.hubSub}>
+                  {t('dashboard.investPreview', { val: fmt(portfolioVal) })}
+                </Text>
+                {gainLossPct != null && (
+                  <Text style={[styles.hubBadge, { color: gainLossPct >= 0 ? MC.emerald : MC.clay }]}>
+                    {gainLossPct >= 0 ? '↑' : '↓'} {Math.abs(gainLossPct).toFixed(1)}%
+                  </Text>
+                )}
+              </View>
             </View>
             <Text style={styles.hubArrow}>›</Text>
           </Pressable>
@@ -185,7 +197,14 @@ export default function DashboardScreen() {
             <Text style={styles.hubIcon}>🧭</Text>
             <View style={styles.hubBody}>
               <Text style={styles.hubTitle}>{t('dashboard.coachTitle')}</Text>
-              <Text style={styles.hubSub}>{coachSub}</Text>
+              {data.coachPlan ? (
+                <>
+                  <Text style={styles.hubModel}>{data.coachPlan.model}</Text>
+                  <Text style={styles.hubTip} numberOfLines={1}>{data.coachPlan.nextAction}</Text>
+                </>
+              ) : (
+                <Text style={styles.hubSub}>{t('dashboard.coachSub')}</Text>
+              )}
             </View>
             <Text style={styles.hubArrow}>›</Text>
           </Pressable>
@@ -477,5 +496,9 @@ const styles = StyleSheet.create({
   hubBody: { flex: 1 },
   hubTitle: { fontSize: 15, fontFamily: MF.bold, color: MC.ink },
   hubSub: { fontSize: 12, fontFamily: MF.regular, color: MC.muted, marginTop: 2 },
+  hubValRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 },
+  hubBadge: { fontSize: 11, fontFamily: MF.semiBold },
+  hubModel: { fontSize: 13, fontFamily: MF.semiBold, color: MC.indigo, marginTop: 2 },
+  hubTip: { fontSize: 11, fontFamily: MF.regular, color: MC.muted, marginTop: 1 },
   hubArrow: { fontSize: 22, color: MC.muted },
 });

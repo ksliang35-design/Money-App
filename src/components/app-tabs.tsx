@@ -24,6 +24,11 @@ export default function AppTabs() {
           ))}
         </BottomBar>
       </TabList>
+      {/* Register non-tab screens so expo-router doesn't auto-add them to the tab bar */}
+      <TabTrigger name="invest" href="/invest" />
+      <TabTrigger name="coach" href="/coach" />
+      <TabTrigger name="profile" href="/profile" />
+      <TabTrigger name="explore" href="/explore" />
     </Tabs>
   );
 }
