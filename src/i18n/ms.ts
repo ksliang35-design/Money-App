@@ -56,6 +56,8 @@ export const ms: typeof en = {
     quickAdd: '⚡ Tambah Pantas',
     onCard: '💳 Kad Kredit',
     cardNote: '{pct}% perbelanjaan · ini yang perlu anda bayar',
+    cardFilterHint: 'Ketuk untuk tapis mengikut kad',
+    cardFilterActive: '✓ Menunjukkan perbelanjaan kad',
     methodCard: 'Kad Kredit',
     methodEwallet: 'E-dompet',
     methodCash: 'Tunai',

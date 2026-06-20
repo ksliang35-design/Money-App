@@ -149,16 +149,23 @@ export default function ExpensesScreen() {
           </View>
         </View>
 
-        {/* Card spotlight */}
-        <LinearGradient
-          colors={[MC.clay, '#9A3F2B']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={styles.cardSpot}>
-          <Text style={styles.spotTop}>{t('expenses.onCard')}</Text>
-          <Text style={styles.spotAmt}>{fmt(cardTotal)}</Text>
-          <Text style={styles.spotSub}>{t('expenses.cardNote', { pct: cardPct })}</Text>
-        </LinearGradient>
+        {/* Card spotlight — tappable filter toggle */}
+        <Pressable
+          onPress={() => setFilter((f) => (f === 'card' ? 'all' : 'card'))}
+          style={({ pressed }) => [pressed && styles.cardSpotPressed]}>
+          <LinearGradient
+            colors={[MC.clay, '#9A3F2B']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={[styles.cardSpot, filter === 'card' && styles.cardSpotActive]}>
+            <Text style={styles.spotTop}>{t('expenses.onCard')}</Text>
+            <Text style={styles.spotAmt}>{fmt(cardTotal)}</Text>
+            <Text style={styles.spotSub}>{t('expenses.cardNote', { pct: cardPct })}</Text>
+            <Text style={[styles.spotHint, filter === 'card' && styles.spotHintActive]}>
+              {filter === 'card' ? t('expenses.cardFilterActive') : t('expenses.cardFilterHint')}
+            </Text>
+          </LinearGradient>
+        </Pressable>
 
         {/* By method grid */}
         <View style={styles.methGrid}>
@@ -429,10 +436,21 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.35,
     shadowRadius: 16,
     elevation: 6,
+    borderWidth: 2,
+    borderColor: 'transparent',
+  },
+  cardSpotActive: {
+    borderColor: 'rgba(255,255,255,0.6)',
+  },
+  cardSpotPressed: {
+    opacity: 0.82,
+    transform: [{ scale: 0.975 }],
   },
   spotTop: { fontSize: 12, fontFamily: MF.semiBold, color: 'rgba(255,255,255,0.9)', textTransform: 'uppercase', letterSpacing: 0.6 },
   spotAmt: { fontSize: 38, fontFamily: MF.bold, color: '#fff', lineHeight: 46 },
   spotSub: { fontSize: 12, fontFamily: MF.regular, color: 'rgba(255,255,255,0.85)' },
+  spotHint: { fontSize: 11, fontFamily: MF.medium, color: 'rgba(255,255,255,0.5)', marginTop: 2 },
+  spotHintActive: { color: 'rgba(255,255,255,0.9)', fontFamily: MF.semiBold },
 
   methGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: MS.sm },
   methCard: {

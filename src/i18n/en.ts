@@ -54,6 +54,8 @@ export const en = {
     quickAdd: '⚡ Quick Add',
     onCard: '💳 On credit card',
     cardNote: '{pct}% of spending · this is what you\'ll owe',
+    cardFilterHint: 'Tap to filter by card',
+    cardFilterActive: '✓ Showing card expenses',
     methodCard: 'Credit Card',
     methodEwallet: 'E-wallet',
     methodCash: 'Cash',
