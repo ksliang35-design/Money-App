@@ -1,4 +1,5 @@
 import { LinearGradient } from 'expo-linear-gradient';
+import { Link } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -24,6 +25,12 @@ export default function DashboardScreen() {
     { label: t('dashboard.sideLabel'), val: data.side, color: MC.gold },
   ];
 
+  const initials = data.name.slice(0, 2).toUpperCase();
+  const portfolioVal = data.portfolioValue ?? 0;
+  const coachSub = data.coachPlan
+    ? t('dashboard.coachPlanActive')
+    : t('dashboard.coachSub');
+
   return (
     <View style={styles.root}>
       <ScrollView
@@ -33,9 +40,21 @@ export default function DashboardScreen() {
 
         {/* Header */}
         <View style={styles.headerRow}>
-          <View>
-            <Text style={styles.greeting}>{t('dashboard.greeting', { name: data.name })}</Text>
-            <Text style={styles.month}>{data.month}</Text>
+          <View style={styles.headerLeft}>
+            {/* Profile icon — top-left, navigates to Profile screen */}
+            <Link href="/profile" asChild>
+              <Pressable hitSlop={8}>
+                <LinearGradient
+                  colors={[MC.emerald, MC.emeraldDark]}
+                  style={styles.profileBadge}>
+                  <Text style={styles.profileInitials}>{initials}</Text>
+                </LinearGradient>
+              </Pressable>
+            </Link>
+            <View>
+              <Text style={styles.greeting}>{t('dashboard.greeting', { name: data.name })}</Text>
+              <Text style={styles.month}>{data.month}</Text>
+            </View>
           </View>
           <View style={styles.headerBtns}>
             <Pressable style={styles.langBadge} onPress={() => setLangOpen(true)}>
@@ -145,6 +164,33 @@ export default function DashboardScreen() {
           <Text style={styles.aiNudgeArrow}>›</Text>
         </Pressable>
 
+        {/* ── Hub cards: Investments + Budget Coach ── */}
+        <Text style={styles.sectionLabel}>{t('dashboard.quickAccess')}</Text>
+
+        <Link href="/invest" asChild>
+          <Pressable style={({ pressed }) => [styles.hubCard, pressed && styles.hubCardPressed]}>
+            <Text style={styles.hubIcon}>📈</Text>
+            <View style={styles.hubBody}>
+              <Text style={styles.hubTitle}>{t('dashboard.investTitle')}</Text>
+              <Text style={styles.hubSub}>
+                {t('dashboard.investPreview', { val: fmt(portfolioVal) })}
+              </Text>
+            </View>
+            <Text style={styles.hubArrow}>›</Text>
+          </Pressable>
+        </Link>
+
+        <Link href="/coach" asChild>
+          <Pressable style={({ pressed }) => [styles.hubCard, pressed && styles.hubCardPressed]}>
+            <Text style={styles.hubIcon}>🧭</Text>
+            <View style={styles.hubBody}>
+              <Text style={styles.hubTitle}>{t('dashboard.coachTitle')}</Text>
+              <Text style={styles.hubSub}>{coachSub}</Text>
+            </View>
+            <Text style={styles.hubArrow}>›</Text>
+          </Pressable>
+        </Link>
+
         <View style={{ height: MS.xxl }} />
       </ScrollView>
 
@@ -174,20 +220,14 @@ function DonutChart({
   centerSub: string;
 }) {
   let acc = 0;
-  const r = 46;
-  const size = 112;
-  const cx = size / 2;
-  const cy = size / 2;
 
   return (
     <View style={styles.donutContainer}>
-      {/* SVG-like using Views – we'll use a simple approach with borders */}
       <View style={styles.donutOuter}>
         <View style={styles.donutInner}>
           <Text style={styles.donutCenterLabel}>{centerLabel}</Text>
           <Text style={styles.donutCenterSub}>{centerSub}</Text>
         </View>
-        {/* Percentage arcs as colored borders overlay - simplified representation */}
         {segments.map((s, i) => {
           const frac = total > 0 ? s.val / total : 0;
           acc += frac;
@@ -216,14 +256,34 @@ const styles = StyleSheet.create({
   scroll: { flex: 1 },
   content: { padding: MS.lg, gap: MS.md },
 
+  // Header
   headerRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: MS.sm,
   },
-  greeting: { fontSize: 20, fontFamily: MF.bold, color: MC.ink },
-  month: { fontSize: 13, fontFamily: MF.regular, color: MC.muted, marginTop: 2 },
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: MS.md,
+    flex: 1,
+  },
+  profileBadge: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: MC.emerald,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.35,
+    shadowRadius: 6,
+    elevation: 4,
+  },
+  profileInitials: { fontSize: 15, fontFamily: MF.bold, color: '#fff' },
+  greeting: { fontSize: 17, fontFamily: MF.bold, color: MC.ink },
+  month: { fontSize: 12, fontFamily: MF.regular, color: MC.muted, marginTop: 1 },
 
   headerBtns: {
     flexDirection: 'row',
@@ -256,6 +316,7 @@ const styles = StyleSheet.create({
   },
   horseGlyph: { fontSize: 22, color: '#fff' },
 
+  // Hero
   hero: {
     borderRadius: MR.xxl,
     padding: MS.xl,
@@ -301,6 +362,7 @@ const styles = StyleSheet.create({
     marginTop: 3,
   },
 
+  // Quick stats grid
   grid2: { flexDirection: 'row', gap: MS.sm },
   statCard: {
     flex: 1,
@@ -313,6 +375,7 @@ const styles = StyleSheet.create({
   statKey: { fontSize: 11, fontFamily: MF.medium, color: MC.muted, textTransform: 'uppercase', letterSpacing: 0.4 },
   statVal: { fontSize: 22, fontFamily: MF.bold, marginTop: 4 },
 
+  // Card base
   card: {
     backgroundColor: MC.card,
     borderWidth: 1,
@@ -322,6 +385,7 @@ const styles = StyleSheet.create({
   },
   cardTitle: { fontSize: 15, fontFamily: MF.bold, color: MC.ink, marginBottom: MS.md },
 
+  // Donut
   donutWrap: { flexDirection: 'row', alignItems: 'flex-start', gap: MS.lg },
   donutContainer: { width: 100, height: 100 },
   donutOuter: {
@@ -345,6 +409,7 @@ const styles = StyleSheet.create({
     borderRadius: 50,
   },
 
+  // Legend
   legend: { flex: 1, gap: MS.sm },
   legRow: { flexDirection: 'row', alignItems: 'center', gap: MS.sm },
   legDot: { width: 10, height: 10, borderRadius: 3 },
@@ -364,12 +429,14 @@ const styles = StyleSheet.create({
   meterFill: { height: '100%', borderRadius: 4 },
   indepNote: { fontSize: 11, fontFamily: MF.regular, color: '#6B5A23', lineHeight: 16 },
 
+  // History bars
   bars: { flexDirection: 'row', alignItems: 'flex-end', gap: 10, height: 100 },
   barCol: { flex: 1, alignItems: 'center', justifyContent: 'flex-end', gap: 4 },
   barFill: { width: '80%', borderRadius: 6, minHeight: 6 },
   barLabel: { fontSize: 10, fontFamily: MF.medium, color: MC.muted },
   barHint: { fontSize: 11, fontFamily: MF.regular, color: MC.muted, marginTop: MS.sm },
 
+  // AI nudge
   aiNudge: {
     backgroundColor: MC.card,
     borderWidth: 1,
@@ -385,4 +452,30 @@ const styles = StyleSheet.create({
   aiNudgeTitle: { fontSize: 15, fontFamily: MF.bold, color: MC.ink },
   aiNudgeSub: { fontSize: 12, fontFamily: MF.regular, color: MC.muted, marginTop: 2 },
   aiNudgeArrow: { fontSize: 22, color: MC.muted },
+
+  // Hub section
+  sectionLabel: {
+    fontSize: 11,
+    fontFamily: MF.bold,
+    color: MC.muted,
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+    marginTop: MS.xs,
+  },
+  hubCard: {
+    backgroundColor: MC.card,
+    borderWidth: 1,
+    borderColor: MC.line,
+    borderRadius: MR.xl,
+    padding: MS.lg,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: MS.md,
+  },
+  hubCardPressed: { opacity: 0.7 },
+  hubIcon: { fontSize: 28 },
+  hubBody: { flex: 1 },
+  hubTitle: { fontSize: 15, fontFamily: MF.bold, color: MC.ink },
+  hubSub: { fontSize: 12, fontFamily: MF.regular, color: MC.muted, marginTop: 2 },
+  hubArrow: { fontSize: 22, color: MC.muted },
 });

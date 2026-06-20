@@ -44,6 +44,12 @@ export const zh: typeof en = {
     historyHint: '当前月份以金色标注',
     aiTitle: '与理财 AI 对话',
     aiSub: '询问您的消费、目标或储蓄情况',
+    quickAccess: '快速入口',
+    investTitle: '投资',
+    investPreview: '投资组合 · {val}',
+    coachTitle: '预算规划师',
+    coachSub: '获取您的个人理财方案',
+    coachPlanActive: '查看您的预算方案',
   },
   expenses: {
     title: '支出',

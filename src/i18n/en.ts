@@ -42,6 +42,12 @@ export const en = {
     historyHint: 'Current month highlighted in gold',
     aiTitle: 'Talk to Money AI',
     aiSub: 'Ask about your spending, goals, or savings',
+    quickAccess: 'Quick access',
+    investTitle: 'Investments',
+    investPreview: 'Portfolio · {val}',
+    coachTitle: 'Budget Coach',
+    coachSub: 'Get your personalised plan',
+    coachPlanActive: 'View your budget plan',
   },
   expenses: {
     title: 'Expenses',

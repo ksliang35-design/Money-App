@@ -44,6 +44,12 @@ export const ms: typeof en = {
     historyHint: 'Bulan semasa ditanda dengan warna emas',
     aiTitle: 'Berbual dengan AI Kewangan',
     aiSub: 'Tanya tentang perbelanjaan, matlamat, atau simpanan anda',
+    quickAccess: 'Akses pantas',
+    investTitle: 'Pelaburan',
+    investPreview: 'Portfolio · {val}',
+    coachTitle: 'Penasihat Belanjawan',
+    coachSub: 'Dapatkan pelan peribadi anda',
+    coachPlanActive: 'Lihat pelan belanjawan anda',
   },
   expenses: {
     title: 'Perbelanjaan',
