@@ -106,6 +106,7 @@ function formatCategory(byCategory: Record<string, number>): string {
 export async function getCoachPlan(
   profile: CoachProfile,
   financials: CoachFinancials,
+  chosenModel?: string,
 ): Promise<CoachPlan> {
   const apiKey = process.env.EXPO_PUBLIC_GEMINI_API_KEY;
   if (!apiKey) throw new Error('NO_API_KEY');
@@ -113,6 +114,10 @@ export async function getCoachPlan(
   const categoryLine = financials.byCategory
     ? `\n- Spending by category: ${formatCategory(financials.byCategory)}`
     : '';
+
+  const instruction = chosenModel
+    ? `IMPORTANT: The user has already chosen the "${chosenModel}" model. You MUST use exactly "${chosenModel}" as the model value in your JSON — do not choose a different one. Generate the full bucket breakdown, nextAction, and encouragement for "${chosenModel}".`
+    : 'Give me a personalised budgeting plan.';
 
   const fullPrompt = `${SYSTEM_PROMPT}
 
@@ -128,7 +133,7 @@ This month's numbers:
 - Savings rate: ${financials.savingsRate}%
 - Spending by method: Card RM ${financials.byMethod.card.toLocaleString('en-MY')}, E-wallet RM ${financials.byMethod.ewallet.toLocaleString('en-MY')}, Cash RM ${financials.byMethod.cash.toLocaleString('en-MY')}, Bank transfer RM ${financials.byMethod.bank.toLocaleString('en-MY')}${categoryLine}
 
-Give me a personalised budgeting plan.`;
+${instruction}`;
 
   const res = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,

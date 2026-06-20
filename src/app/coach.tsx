@@ -4,6 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { MC, MF, MR, MS, fmt } from '@/constants/money-theme';
 import {
+  getCoachPlan,
   getModelOptions,
   type CoachPlan,
   type ModelOption,
@@ -92,11 +93,39 @@ export default function CoachScreen() {
     fetchOptions(finalAnswers);
   };
 
+  const fetchPlan = async (chosenModel: string) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const result = await getCoachPlan(
+        { age: answers.age!, incomeBracket: answers.incomeBracket!, goal: answers.goal! },
+        {
+          income: data.income,
+          expense: data.expense,
+          net: data.net,
+          savingsRate: data.savingsRate,
+          byMethod: data.byMethod,
+          byCategory: data.byCategory,
+        },
+        chosenModel,
+      );
+      setPlan(result);
+      saveCoachResult(
+        { age: answers.age!, incomeBracket: answers.incomeBracket!, goal: answers.goal! },
+        result,
+      );
+    } catch (e: any) {
+      setError(e?.message ?? 'Something went wrong. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleSelectModel = (opt: ModelOption) => {
     const chosen: CoachPlan = {
       model: opt.model,
       why: opt.why,
-      buckets: [],   // Step 2 will populate this
+      buckets: [],
       nextAction: '',
       encouragement: '',
     };
@@ -106,11 +135,15 @@ export default function CoachScreen() {
       chosen,
     );
     setStep('done');
+    fetchPlan(opt.model);
   };
 
   const handleRetry = () => {
-    if (!answers.age || !answers.incomeBracket || !answers.goal) return;
-    fetchOptions({ age: answers.age, incomeBracket: answers.incomeBracket, goal: answers.goal });
+    if (step === 'done' && plan) {
+      fetchPlan(plan.model);
+    } else if (answers.age && answers.incomeBracket && answers.goal) {
+      fetchOptions({ age: answers.age, incomeBracket: answers.incomeBracket, goal: answers.goal });
+    }
   };
 
   const handleRestart = () => {
@@ -329,90 +362,117 @@ export default function CoachScreen() {
           <>
             {profileRecap}
 
-            {!error && plan && (
+            {/* Chosen model header — always visible once plan exists */}
+            {plan && (
+              <View style={styles.chosenCard}>
+                <Text style={styles.chosenCheck}>✓</Text>
+                <View style={styles.chosenTextWrap}>
+                  <Text style={styles.chosenModel}>{plan.model}</Text>
+                  <Text style={styles.chosenLabel}>{t('coach.modelChosen')}</Text>
+                </View>
+              </View>
+            )}
+
+            {/* Loading breakdown */}
+            {loading && (
+              <View style={styles.loadingCard}>
+                <ActivityIndicator size="large" color={MC.indigo} />
+                <Text style={styles.loadingText}>{t('coach.loading')}</Text>
+              </View>
+            )}
+
+            {/* Errors */}
+            {!loading && error === 'NO_API_KEY' && (
+              <View style={styles.noKeyCard}>
+                <Text style={styles.noKeyIcon}>🔑</Text>
+                <Text style={styles.noKeyTitle}>{t('coach.noKeyTitle')}</Text>
+                <Text style={styles.noKeyMsg}>{t('coach.noKeyMsg')}</Text>
+              </View>
+            )}
+            {!loading && error && error !== 'NO_API_KEY' && (
+              <View style={styles.errorCard}>
+                <Text style={styles.errorIcon}>⚠️</Text>
+                <Text style={styles.errorTitle}>{t('coach.errorTitle')}</Text>
+                <Text style={styles.errorMsg}>{error}</Text>
+                <Pressable
+                  style={({ pressed }) => [styles.retryBtn, pressed && { opacity: 0.7 }]}
+                  onPress={handleRetry}>
+                  <Text style={styles.retryTxt}>{t('common.tryAgain')}</Text>
+                </Pressable>
+              </View>
+            )}
+
+            {/* Full breakdown */}
+            {!loading && !error && plan && plan.buckets.length > 0 && (
               <>
-                {/* Chosen model confirmation */}
-                <View style={styles.chosenCard}>
-                  <Text style={styles.chosenCheck}>✓</Text>
-                  <View style={styles.chosenTextWrap}>
-                    <Text style={styles.chosenModel}>{plan.model}</Text>
-                    <Text style={styles.chosenLabel}>{t('coach.modelChosen')}</Text>
-                  </View>
+                <View style={styles.card}>
+                  <Text style={styles.sectionLabel}>{t('coach.budgetBreakdown')}</Text>
+                  {plan.buckets.map((bucket, i) => {
+                    const pct =
+                      bucket.targetRM > 0
+                        ? Math.min(100, Math.round((bucket.actualRM / bucket.targetRM) * 100))
+                        : 0;
+                    const over = bucket.actualRM > bucket.targetRM;
+                    const fillColor = over ? MC.clay : MC.emerald;
+                    return (
+                      <View
+                        key={bucket.label}
+                        style={[
+                          styles.bucketRow,
+                          i < plan.buckets.length - 1 && styles.bucketRowBorder,
+                        ]}>
+                        <View style={styles.bucketHeader}>
+                          <Text style={styles.bucketLabel}>{bucket.label}</Text>
+                          <Text style={[styles.bucketStatus, { color: fillColor }]}>
+                            {over ? t('coach.overBudget') : t('coach.onTrack')}
+                          </Text>
+                        </View>
+                        <View style={styles.meterBg}>
+                          <View
+                            style={[
+                              styles.meterFill,
+                              { width: `${pct}%` as any, backgroundColor: fillColor },
+                            ]}
+                          />
+                        </View>
+                        <View style={styles.bucketNums}>
+                          <Text style={styles.bucketNum}>
+                            {t('coach.actual')}{' '}
+                            <Text style={{ color: fillColor, fontFamily: MF.bold }}>
+                              {fmt(bucket.actualRM)}
+                            </Text>
+                          </Text>
+                          <Text style={styles.bucketNum}>{t('coach.target2')} {fmt(bucket.targetRM)}</Text>
+                        </View>
+                      </View>
+                    );
+                  })}
                 </View>
 
-                {plan.buckets.length > 0 ? (
-                  <>
-                    {/* Budget breakdown */}
-                    <View style={styles.card}>
-                      <Text style={styles.sectionLabel}>{t('coach.budgetBreakdown')}</Text>
-                      {plan.buckets.map((bucket, i) => {
-                        const pct =
-                          bucket.targetRM > 0
-                            ? Math.min(100, Math.round((bucket.actualRM / bucket.targetRM) * 100))
-                            : 0;
-                        const over = bucket.actualRM > bucket.targetRM;
-                        const fillColor = over ? MC.clay : MC.emerald;
-                        return (
-                          <View
-                            key={bucket.label}
-                            style={[
-                              styles.bucketRow,
-                              i < plan.buckets.length - 1 && styles.bucketRowBorder,
-                            ]}>
-                            <View style={styles.bucketHeader}>
-                              <Text style={styles.bucketLabel}>{bucket.label}</Text>
-                              <Text style={[styles.bucketStatus, { color: fillColor }]}>
-                                {over ? t('coach.overBudget') : t('coach.onTrack')}
-                              </Text>
-                            </View>
-                            <View style={styles.meterBg}>
-                              <View
-                                style={[
-                                  styles.meterFill,
-                                  { width: `${pct}%` as any, backgroundColor: fillColor },
-                                ]}
-                              />
-                            </View>
-                            <View style={styles.bucketNums}>
-                              <Text style={styles.bucketNum}>
-                                {t('coach.actual')}{' '}
-                                <Text style={{ color: fillColor, fontFamily: MF.bold }}>
-                                  {fmt(bucket.actualRM)}
-                                </Text>
-                              </Text>
-                              <Text style={styles.bucketNum}>{t('coach.target2')} {fmt(bucket.targetRM)}</Text>
-                            </View>
-                          </View>
-                        );
-                      })}
-                    </View>
-
-                    {!!plan.nextAction && (
-                      <View style={[styles.card, styles.actionCard]}>
-                        <Text style={styles.actionBadge}>{t('coach.thisWeek')}</Text>
-                        <Text style={styles.actionText}>{plan.nextAction}</Text>
-                      </View>
-                    )}
-
-                    {!!plan.encouragement && (
-                      <View style={styles.encourageCard}>
-                        <Text style={styles.encourageText}>"{plan.encouragement}"</Text>
-                      </View>
-                    )}
-                  </>
-                ) : (
-                  /* Placeholder — Step 2 will add the full personalised breakdown */
-                  <View style={styles.placeholderCard}>
-                    <Text style={styles.placeholderText}>{t('coach.breakdownSoon')}</Text>
-                    {!!plan.why && (
-                      <Text style={styles.placeholderWhy}>{plan.why}</Text>
-                    )}
+                {!!plan.nextAction && (
+                  <View style={[styles.card, styles.actionCard]}>
+                    <Text style={styles.actionBadge}>{t('coach.thisWeek')}</Text>
+                    <Text style={styles.actionText}>{plan.nextAction}</Text>
                   </View>
                 )}
 
-                <Text style={styles.disclaimer}>{t('coach.disclaimer')}</Text>
+                {!!plan.encouragement && (
+                  <View style={styles.encourageCard}>
+                    <Text style={styles.encourageText}>"{plan.encouragement}"</Text>
+                  </View>
+                )}
               </>
             )}
+
+            {/* Placeholder: model chosen but breakdown not yet loaded (e.g. app reloaded mid-flow) */}
+            {!loading && !error && plan && plan.buckets.length === 0 && (
+              <View style={styles.placeholderCard}>
+                <Text style={styles.placeholderText}>{t('coach.breakdownSoon')}</Text>
+                {!!plan.why && <Text style={styles.placeholderWhy}>{plan.why}</Text>}
+              </View>
+            )}
+
+            {!loading && <Text style={styles.disclaimer}>{t('coach.disclaimer')}</Text>}
 
             <Pressable
               style={({ pressed }) => [styles.restartBtn, pressed && { opacity: 0.6 }]}
