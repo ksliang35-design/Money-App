@@ -16,13 +16,18 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ExpenseEditModal, type ExpenseModalMode } from '@/components/expense-edit-modal';
 import { MC, MF, MR, MS, fmt } from '@/constants/money-theme';
-import { type Expense } from '@/constants/mock-data';
+import { type Expense, type ExpenseCategory, CATEGORY_STYLE } from '@/constants/mock-data';
 import { parseExpense, type ParsedExpense } from '@/lib/quickadd';
 import { useT } from '@/i18n';
 import { useAppData } from '@/store/AppDataProvider';
 
 type Method = 'all' | 'card' | 'ewallet' | 'cash' | 'bank';
 type ExpenseMethod = 'card' | 'ewallet' | 'cash' | 'bank';
+
+const ALL_CATEGORIES: ExpenseCategory[] = [
+  'food', 'transport', 'shopping', 'bills',
+  'entertainment', 'health', 'education', 'other',
+];
 
 const METHOD_ICONS: Record<string, { icon: string; color: string }> = {
   card: { icon: '💳', color: MC.clay },
@@ -52,6 +57,22 @@ export default function ExpensesScreen() {
     { key: 'cash', label: t('expenses.filterCash') },
     { key: 'bank', label: t('expenses.filterBank') },
   ];
+
+  const CATEGORY_LABELS: Record<ExpenseCategory, string> = {
+    food:          t('expenses.categoryFood'),
+    transport:     t('expenses.categoryTransport'),
+    shopping:      t('expenses.categoryShopping'),
+    bills:         t('expenses.categoryBills'),
+    entertainment: t('expenses.categoryEntertainment'),
+    health:        t('expenses.categoryHealth'),
+    education:     t('expenses.categoryEducation'),
+    other:         t('expenses.categoryOther'),
+  };
+
+  const activeCats = ALL_CATEGORIES
+    .map((c) => ({ cat: c, amt: data.byCategory[c] }))
+    .filter((x) => x.amt > 0)
+    .sort((a, b) => b.amt - a.amt);
 
   // Quick Add state
   const [quickOpen, setQuickOpen] = useState(false);
@@ -97,7 +118,7 @@ export default function ExpensesScreen() {
 
   function handleQuickConfirm() {
     if (!qaResult?.isExpense) return;
-    addExpense({ label: qaResult.label, amount: qaResult.amount, method: qaMethod });
+    addExpense({ label: qaResult.label, amount: qaResult.amount, method: qaMethod, category: qaResult.category });
     handleQuickClose();
   }
 
@@ -149,6 +170,28 @@ export default function ExpensesScreen() {
           ))}
         </View>
 
+        {/* Category breakdown */}
+        {activeCats.length > 0 && (
+          <View>
+            <Text style={styles.sectionLabel}>{t('expenses.categoryBreakdown')}</Text>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.catScroll}>
+              {activeCats.map(({ cat, amt }) => {
+                const s = CATEGORY_STYLE[cat];
+                return (
+                  <View key={cat} style={[styles.catCard, { borderLeftColor: s.fg }]}>
+                    <Text style={styles.catCardIcon}>{s.icon}</Text>
+                    <Text style={styles.catCardName}>{CATEGORY_LABELS[cat]}</Text>
+                    <Text style={[styles.catCardAmt, { color: s.fg }]}>{fmt(amt)}</Text>
+                  </View>
+                );
+              })}
+            </ScrollView>
+          </View>
+        )}
+
         {/* Filter chips */}
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterScroll} contentContainerStyle={styles.filterContent}>
           {FILTER_OPTIONS.map((f) => (
@@ -184,6 +227,17 @@ export default function ExpensesScreen() {
                 <Text style={styles.expIcon}>{m?.icon ?? '•'}</Text>
                 <View style={styles.expMid}>
                   <Text style={styles.expLabel}>{e.label}</Text>
+                  {(() => {
+                    const cat = e.category ?? 'other';
+                    const s = CATEGORY_STYLE[cat];
+                    return (
+                      <View style={[styles.expCatTag, { backgroundColor: s.bg }]}>
+                        <Text style={[styles.expCatText, { color: s.fg }]}>
+                          {s.icon} {CATEGORY_LABELS[cat]}
+                        </Text>
+                      </View>
+                    );
+                  })()}
                   <View style={styles.expMeterBg}>
                     <View style={[styles.expMeterFill, { width: `${pct}%`, backgroundColor: m?.color ?? MC.muted }]} />
                   </View>
@@ -431,6 +485,39 @@ const styles = StyleSheet.create({
   expAmt: { fontSize: 14, fontFamily: MF.bold, color: MC.ink },
 
   emptyText: { fontSize: 13, fontFamily: MF.regular, color: MC.muted, textAlign: 'center', paddingVertical: MS.lg },
+
+  expCatTag: {
+    alignSelf: 'flex-start',
+    borderRadius: 4,
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    marginTop: 2,
+    marginBottom: 3,
+  },
+  expCatText: { fontSize: 9.5, fontFamily: MF.medium },
+
+  sectionLabel: {
+    fontSize: 11,
+    fontFamily: MF.semiBold,
+    color: MC.muted,
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+    marginBottom: MS.sm,
+  },
+  catScroll: { gap: MS.sm, paddingBottom: 2 },
+  catCard: {
+    width: 108,
+    backgroundColor: MC.card,
+    borderWidth: 1,
+    borderColor: MC.line,
+    borderLeftWidth: 3,
+    borderRadius: MR.md,
+    padding: MS.md,
+    gap: 2,
+  },
+  catCardIcon: { fontSize: 18 },
+  catCardName: { fontSize: 10, fontFamily: MF.medium, color: MC.muted },
+  catCardAmt: { fontSize: 15, fontFamily: MF.bold },
 
   totalRow: {
     flexDirection: 'row',

@@ -2,7 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 
-import { MOCK, type Expense, type Goal, type Holding, type Income, type HistoryEntry, type Note } from '@/constants/mock-data';
+import { MOCK, type Expense, type ExpenseCategory, type Goal, type Holding, type Income, type HistoryEntry, type Note } from '@/constants/mock-data';
 import type { CoachProfile, CoachPlan } from '@/lib/coach';
 import type { Language } from '@/i18n';
 
@@ -34,6 +34,7 @@ export interface DerivedData extends RawData {
   savingsRate: number;
   sideShare: number;
   byMethod: { card: number; ewallet: number; cash: number; bank: number };
+  byCategory: Record<ExpenseCategory, number>;
   portfolioValue: number;
 }
 
@@ -93,8 +94,12 @@ function derive(raw: RawData): DerivedData {
   const net = income - expense;
   const savingsRate = income > 0 ? Math.round((net / income) * 100) : 0;
   const sideShare = income > 0 ? Math.round((side / income) * 100) : 0;
+  const ALL_CATS: ExpenseCategory[] = ['food', 'transport', 'shopping', 'bills', 'entertainment', 'health', 'education', 'other'];
+  const byCategory = Object.fromEntries(
+    ALL_CATS.map((c) => [c, raw.expenses.filter((e) => (e.category ?? 'other') === c).reduce((s, e) => s + e.amount, 0)]),
+  ) as Record<ExpenseCategory, number>;
   const portfolioValue = (raw.holdings ?? []).reduce((s, h) => s + h.currentValue, 0);
-  return { ...raw, income, salary, side, expense, net, savingsRate, sideShare, byMethod, portfolioValue };
+  return { ...raw, income, salary, side, expense, net, savingsRate, sideShare, byMethod, byCategory, portfolioValue };
 }
 
 const AppDataContext = createContext<AppDataContextValue | null>(null);

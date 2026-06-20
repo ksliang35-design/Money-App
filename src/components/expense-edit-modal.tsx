@@ -4,6 +4,7 @@ import {
   Modal,
   Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -12,7 +13,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { MC, MF, MR, MS } from '@/constants/money-theme';
-import { type Expense } from '@/constants/mock-data';
+import { type Expense, type ExpenseCategory, CATEGORY_STYLE } from '@/constants/mock-data';
 import { useT } from '@/i18n';
 import { useAppData } from '@/store/AppDataProvider';
 
@@ -29,6 +30,11 @@ const METHOD_ICONS: Record<Method, { icon: string; color: string }> = {
   cash:    { icon: '💵', color: MC.emerald },
   bank:    { icon: '🏦', color: MC.gold    },
 };
+
+const ALL_CATEGORIES: ExpenseCategory[] = [
+  'food', 'transport', 'shopping', 'bills',
+  'entertainment', 'health', 'education', 'other',
+];
 
 interface Props {
   mode: ExpenseModalMode;
@@ -47,9 +53,21 @@ export function ExpenseEditModal({ mode, onClose }: Props) {
     bank:    { label: t('expenseModal.methodBank'),    ...METHOD_ICONS.bank    },
   };
 
+  const CATEGORY_LABELS: Record<ExpenseCategory, string> = {
+    food:          t('expenses.categoryFood'),
+    transport:     t('expenses.categoryTransport'),
+    shopping:      t('expenses.categoryShopping'),
+    bills:         t('expenses.categoryBills'),
+    entertainment: t('expenses.categoryEntertainment'),
+    health:        t('expenses.categoryHealth'),
+    education:     t('expenses.categoryEducation'),
+    other:         t('expenses.categoryOther'),
+  };
+
   const [label, setLabel] = useState('');
   const [amount, setAmount] = useState('');
   const [method, setMethod] = useState<Method>('card');
+  const [category, setCategory] = useState<ExpenseCategory>('other');
 
   useEffect(() => {
     if (!mode) return;
@@ -57,10 +75,12 @@ export function ExpenseEditModal({ mode, onClose }: Props) {
       setLabel(mode.expense.label);
       setAmount(String(mode.expense.amount));
       setMethod(mode.expense.method as Method);
+      setCategory(mode.expense.category ?? 'other');
     } else {
       setLabel('');
       setAmount('');
       setMethod('card');
+      setCategory('other');
     }
   }, [mode]);
 
@@ -70,9 +90,9 @@ export function ExpenseEditModal({ mode, onClose }: Props) {
   const handleSave = () => {
     if (!isValid) return;
     if (mode?.type === 'edit') {
-      updateExpense(mode.expense.id, { label: label.trim(), amount: parsed, method });
+      updateExpense(mode.expense.id, { label: label.trim(), amount: parsed, method, category });
     } else if (mode?.type === 'add') {
-      addExpense({ label: label.trim(), amount: parsed, method });
+      addExpense({ label: label.trim(), amount: parsed, method, category });
     }
     onClose();
   };
@@ -95,7 +115,11 @@ export function ExpenseEditModal({ mode, onClose }: Props) {
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.overlay}>
         <Pressable style={styles.backdrop} onPress={onClose} />
-        <View style={[styles.sheet, { paddingBottom: insets.bottom + MS.lg }]}>
+        <ScrollView
+          style={styles.sheetScroll}
+          contentContainerStyle={[styles.sheet, { paddingBottom: insets.bottom + MS.lg }]}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}>
           <View style={styles.handle} />
 
           <View style={styles.header}>
@@ -155,6 +179,46 @@ export function ExpenseEditModal({ mode, onClose }: Props) {
             )}
           </View>
 
+          <Text style={styles.fieldLabel}>{t('expenseModal.category')}</Text>
+          <View style={styles.catRow}>
+            {ALL_CATEGORIES.slice(0, 4).map((key) => {
+              const s = CATEGORY_STYLE[key];
+              const active = category === key;
+              return (
+                <Pressable
+                  key={key}
+                  style={[styles.catBtn, active && { backgroundColor: s.bg, borderColor: s.fg }]}
+                  onPress={() => setCategory(key)}>
+                  <Text style={styles.catIcon}>{s.icon}</Text>
+                  <Text
+                    style={[styles.catLabel, active && { color: s.fg, fontFamily: MF.bold }]}
+                    numberOfLines={1}>
+                    {CATEGORY_LABELS[key]}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+          <View style={[styles.catRow, { marginBottom: MS.lg }]}>
+            {ALL_CATEGORIES.slice(4, 8).map((key) => {
+              const s = CATEGORY_STYLE[key];
+              const active = category === key;
+              return (
+                <Pressable
+                  key={key}
+                  style={[styles.catBtn, active && { backgroundColor: s.bg, borderColor: s.fg }]}
+                  onPress={() => setCategory(key)}>
+                  <Text style={styles.catIcon}>{s.icon}</Text>
+                  <Text
+                    style={[styles.catLabel, active && { color: s.fg, fontFamily: MF.bold }]}
+                    numberOfLines={1}>
+                    {CATEGORY_LABELS[key]}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+
           <View style={styles.actions}>
             {isEdit && (
               <Pressable style={styles.deleteBtn} onPress={handleDelete}>
@@ -168,7 +232,7 @@ export function ExpenseEditModal({ mode, onClose }: Props) {
               <Text style={styles.saveTxt}>{isEdit ? t('expenseModal.save') : t('expenseModal.add')}</Text>
             </Pressable>
           </View>
-        </View>
+        </ScrollView>
       </KeyboardAvoidingView>
     </Modal>
   );
@@ -182,6 +246,9 @@ const styles = StyleSheet.create({
   backdrop: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(0,0,0,0.4)',
+  },
+  sheetScroll: {
+    maxHeight: '90%',
   },
   sheet: {
     backgroundColor: MC.bg,
@@ -261,6 +328,24 @@ const styles = StyleSheet.create({
   },
   methodIcon: { fontSize: 18 },
   methodLabel: { fontSize: 10, fontFamily: MF.medium, color: MC.muted },
+
+  catRow: {
+    flexDirection: 'row',
+    gap: MS.sm,
+    marginBottom: MS.sm,
+  },
+  catBtn: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: MS.sm,
+    borderRadius: MR.md,
+    borderWidth: 1.5,
+    borderColor: MC.line,
+    backgroundColor: MC.card,
+    gap: 2,
+  },
+  catIcon: { fontSize: 16 },
+  catLabel: { fontSize: 8.5, fontFamily: MF.medium, color: MC.muted, textAlign: 'center' },
 
   actions: {
     flexDirection: 'row',
