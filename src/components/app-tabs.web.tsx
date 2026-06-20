@@ -10,9 +10,6 @@ export default function AppTabs() {
   const TABS = [
     { name: 'home', href: '/', icon: '⊞', label: t('tabs.home') },
     { name: 'expenses', href: '/expenses', icon: '💸', label: t('tabs.expenses') },
-    { name: 'invest', href: '/invest', icon: '📈', label: t('tabs.invest') },
-    { name: 'coach', href: '/coach', icon: '🧭', label: t('tabs.coach') },
-    { name: 'profile', href: '/profile', icon: '👤', label: t('tabs.profile') },
   ];
   return (
     <Tabs style={styles.root}>
@@ -26,6 +23,10 @@ export default function AppTabs() {
           ))}
         </BottomBar>
       </TabList>
+      {/* Register non-tab screens so expo-router/ui doesn't auto-add them to the tab bar */}
+      <TabTrigger name="invest" href="/invest" />
+      <TabTrigger name="coach" href="/coach" />
+      <TabTrigger name="profile" href="/profile" />
     </Tabs>
   );
 }
@@ -72,10 +73,7 @@ const styles = StyleSheet.create({
   },
   tabIcon: { fontSize: 20, opacity: 0.45 },
   tabIconActive: { opacity: 1 },
-  tabLabel: {
-    fontSize: 10,
-    fontFamily: MF.semiBold,
-  },
+  tabLabel: { fontSize: 10, fontFamily: MF.semiBold },
   tabLabelActive: { color: MC.emeraldDark },
   tabLabelInactive: { color: MC.muted },
 });

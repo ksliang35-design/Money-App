@@ -4,17 +4,15 @@ import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { LanguagePicker } from '@/components/language-picker';
 import { MoneyAIOverlay } from '@/components/money-ai-overlay';
 import { MC, MF, MR, MS, fmt } from '@/constants/money-theme';
-import { useT, type Language } from '@/i18n';
+import { useT } from '@/i18n';
 import { useAppData } from '@/store/AppDataProvider';
 
 export default function DashboardScreen() {
   const insets = useSafeAreaInsets();
   const [aiOpen, setAiOpen] = useState(false);
-  const [langOpen, setLangOpen] = useState(false);
-  const { data, setLanguage } = useAppData();
+  const { data } = useAppData();
   const t = useT();
 
   const maxHistNet = Math.max(...data.history.map((h) => h.net), 1);
@@ -61,14 +59,9 @@ export default function DashboardScreen() {
               <Text style={styles.month}>{data.month}</Text>
             </View>
           </View>
-          <View style={styles.headerBtns}>
-            <Pressable style={styles.langBadge} onPress={() => setLangOpen(true)}>
-              <Text style={styles.langGlyph}>🌐</Text>
-            </Pressable>
-            <Pressable style={styles.horseBadge} onPress={() => setAiOpen(true)}>
-              <Text style={styles.horseGlyph}>♞</Text>
-            </Pressable>
-          </View>
+          <Pressable style={styles.horseBadge} onPress={() => setAiOpen(true)}>
+            <Text style={styles.horseGlyph}>♞</Text>
+          </Pressable>
         </View>
 
         {/* Hero card */}
@@ -159,16 +152,6 @@ export default function DashboardScreen() {
           <Text style={styles.barHint}>{t('dashboard.historyHint')}</Text>
         </View>
 
-        {/* AI nudge */}
-        <Pressable style={styles.aiNudge} onPress={() => setAiOpen(true)}>
-          <Text style={styles.aiNudgeHorse}>♞</Text>
-          <View style={styles.aiNudgeText}>
-            <Text style={styles.aiNudgeTitle}>{t('dashboard.aiTitle')}</Text>
-            <Text style={styles.aiNudgeSub}>{t('dashboard.aiSub')}</Text>
-          </View>
-          <Text style={styles.aiNudgeArrow}>›</Text>
-        </Pressable>
-
         {/* ── Hub cards: Investments + Budget Coach ── */}
         <Text style={styles.sectionLabel}>{t('dashboard.quickAccess')}</Text>
 
@@ -214,13 +197,6 @@ export default function DashboardScreen() {
       </ScrollView>
 
       <MoneyAIOverlay visible={aiOpen} onClose={() => setAiOpen(false)} />
-      {langOpen && (
-        <LanguagePicker
-          modal
-          onSelect={(lang: Language) => { setLanguage(lang); setLangOpen(false); }}
-          onClose={() => setLangOpen(false)}
-        />
-      )}
     </View>
   );
 }
@@ -304,22 +280,6 @@ const styles = StyleSheet.create({
   greeting: { fontSize: 17, fontFamily: MF.bold, color: MC.ink },
   month: { fontSize: 12, fontFamily: MF.regular, color: MC.muted, marginTop: 1 },
 
-  headerBtns: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: MS.sm,
-  },
-  langBadge: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: MC.card,
-    borderWidth: 1.5,
-    borderColor: MC.line,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  langGlyph: { fontSize: 20 },
   horseBadge: {
     width: 48,
     height: 48,
@@ -454,23 +414,6 @@ const styles = StyleSheet.create({
   barFill: { width: '80%', borderRadius: 6, minHeight: 6 },
   barLabel: { fontSize: 10, fontFamily: MF.medium, color: MC.muted },
   barHint: { fontSize: 11, fontFamily: MF.regular, color: MC.muted, marginTop: MS.sm },
-
-  // AI nudge
-  aiNudge: {
-    backgroundColor: MC.card,
-    borderWidth: 1,
-    borderColor: MC.line,
-    borderRadius: MR.xl,
-    padding: MS.lg,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: MS.md,
-  },
-  aiNudgeHorse: { fontSize: 28, color: MC.clay },
-  aiNudgeText: { flex: 1 },
-  aiNudgeTitle: { fontSize: 15, fontFamily: MF.bold, color: MC.ink },
-  aiNudgeSub: { fontSize: 12, fontFamily: MF.regular, color: MC.muted, marginTop: 2 },
-  aiNudgeArrow: { fontSize: 22, color: MC.muted },
 
   // Hub section
   sectionLabel: {
