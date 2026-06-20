@@ -2,7 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createContext, useContext, useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 
-import { MOCK, type Expense, type Goal, type Income, type HistoryEntry } from '@/constants/mock-data';
+import { MOCK, type Expense, type Goal, type Holding, type Income, type HistoryEntry } from '@/constants/mock-data';
 import type { CoachProfile, CoachPlan } from '@/lib/coach';
 import type { Language } from '@/i18n';
 
@@ -14,6 +14,7 @@ interface RawData {
   incomes: Income[];
   expenses: Expense[];
   goals: Goal[];
+  holdings: Holding[];
   history: HistoryEntry[];
   coachProfile: CoachProfile | null;
   coachPlan: CoachPlan | null;
@@ -29,6 +30,7 @@ export interface DerivedData extends RawData {
   savingsRate: number;
   sideShare: number;
   byMethod: { card: number; ewallet: number; cash: number; bank: number };
+  portfolioValue: number;
 }
 
 interface AppDataContextValue {
@@ -43,6 +45,9 @@ interface AppDataContextValue {
   updateGoal: (id: string, updates: Partial<Omit<Goal, 'id'>>) => void;
   addGoal: (goal: Omit<Goal, 'id'>) => void;
   deleteGoal: (id: string) => void;
+  updateHolding: (id: string, updates: Partial<Omit<Holding, 'id'>>) => void;
+  addHolding: (holding: Omit<Holding, 'id'>) => void;
+  deleteHolding: (id: string) => void;
   resetData: () => void;
   saveCoachResult: (profile: CoachProfile, plan: CoachPlan) => void;
   clearCoachResult: () => void;
@@ -55,6 +60,7 @@ const defaultRaw: RawData = {
   incomes: MOCK.incomes,
   expenses: MOCK.expenses,
   goals: MOCK.goals,
+  holdings: MOCK.holdings,
   history: MOCK.history,
   coachProfile: null,
   coachPlan: null,
@@ -79,7 +85,8 @@ function derive(raw: RawData): DerivedData {
   const net = income - expense;
   const savingsRate = income > 0 ? Math.round((net / income) * 100) : 0;
   const sideShare = income > 0 ? Math.round((side / income) * 100) : 0;
-  return { ...raw, income, salary, side, expense, net, savingsRate, sideShare, byMethod };
+  const portfolioValue = (raw.holdings ?? []).reduce((s, h) => s + h.currentValue, 0);
+  return { ...raw, income, salary, side, expense, net, savingsRate, sideShare, byMethod, portfolioValue };
 }
 
 const AppDataContext = createContext<AppDataContextValue | null>(null);
@@ -148,6 +155,19 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       })),
     deleteGoal: (id) =>
       setRaw((r) => ({ ...r, goals: r.goals.filter((g) => g.id !== id) })),
+
+    updateHolding: (id, updates) =>
+      setRaw((r) => ({
+        ...r,
+        holdings: r.holdings.map((h) => (h.id === id ? { ...h, ...updates } : h)),
+      })),
+    addHolding: (holding) =>
+      setRaw((r) => ({
+        ...r,
+        holdings: [...r.holdings, { ...holding, id: nextId('h') }],
+      })),
+    deleteHolding: (id) =>
+      setRaw((r) => ({ ...r, holdings: r.holdings.filter((h) => h.id !== id) })),
 
     resetData: () => setRaw(defaultRaw),
 

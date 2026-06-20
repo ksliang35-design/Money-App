@@ -1,3 +1,14 @@
+export type AssetType = 'Stocks' | 'ETF' | 'Crypto' | 'Gold' | 'Cash' | 'Other';
+
+export interface Holding {
+  id: string;
+  name: string;
+  assetType: AssetType;
+  units?: number;
+  buyPrice?: number;
+  currentValue: number;
+}
+
 export const MOCK = {
   name: 'Steve',
   month: 'June 2026',
@@ -42,9 +53,18 @@ export const MOCK = {
     { month: 'May', net: 1700 },
     { month: 'Jun', net: 2050 },
   ],
+
+  holdings: [
+    { id: 'h1', name: 'Maybank', assetType: 'Stocks' as AssetType, units: 500, buyPrice: 8.5, currentValue: 4500 },
+    { id: 'h2', name: 'MyETF Dow Jones', assetType: 'ETF' as AssetType, units: 200, buyPrice: 1.2, currentValue: 280 },
+    { id: 'h3', name: 'Bitcoin', assetType: 'Crypto' as AssetType, currentValue: 2800 },
+    { id: 'h4', name: 'Public Gold 5g', assetType: 'Gold' as AssetType, currentValue: 1600 },
+    { id: 'h5', name: 'FD / Cash savings', assetType: 'Cash' as AssetType, currentValue: 5000 },
+  ] as Holding[],
 };
 
 export type Expense = (typeof MOCK.expenses)[number];
 export type Goal = (typeof MOCK.goals)[number];
 export type Income = (typeof MOCK.incomes)[number];
 export type HistoryEntry = (typeof MOCK.history)[number];
+// Holding is defined as interface above (has optional fields)
