@@ -167,14 +167,29 @@ export default function ExpensesScreen() {
           </LinearGradient>
         </Pressable>
 
-        {/* By method grid */}
+        {/* By method grid — each card is a tappable filter toggle */}
         <View style={styles.methGrid}>
-          {Object.entries(METHODS).map(([key, m]) => (
-            <View key={key} style={[styles.methCard, { borderLeftColor: m.color }]}>
-              <Text style={styles.methLabel}>{m.icon} {m.label}</Text>
-              <Text style={styles.methAmt}>{fmt(data.byMethod[key as keyof typeof data.byMethod])}</Text>
-            </View>
-          ))}
+          {Object.entries(METHODS).map(([key, m]) => {
+            const active = filter === key;
+            return (
+              <Pressable
+                key={key}
+                onPress={() => setFilter((f) => (f === key ? 'all' : key as Method))}
+                style={({ pressed }) => [
+                  styles.methCard,
+                  active
+                    ? { borderColor: m.color + '66', borderLeftColor: m.color, backgroundColor: m.color + '12' }
+                    : { borderLeftColor: m.color },
+                  pressed && styles.methCardPressed,
+                ]}>
+                <Text style={styles.methLabel}>{m.icon} {m.label}</Text>
+                <Text style={[styles.methAmt, active && { color: m.color }]}>
+                  {fmt(data.byMethod[key as keyof typeof data.byMethod])}
+                </Text>
+                {active && <Text style={[styles.methActiveHint, { color: m.color }]}>✓ filtering</Text>}
+              </Pressable>
+            );
+          })}
         </View>
 
         {/* Category breakdown */}
@@ -464,8 +479,10 @@ const styles = StyleSheet.create({
     padding: MS.md,
     gap: 3,
   },
+  methCardPressed: { opacity: 0.7, transform: [{ scale: 0.96 }] },
   methLabel: { fontSize: 11, fontFamily: MF.medium, color: MC.muted },
   methAmt: { fontSize: 16, fontFamily: MF.bold, color: MC.ink },
+  methActiveHint: { fontSize: 9.5, fontFamily: MF.semiBold, marginTop: 1 },
 
   filterScroll: { flexShrink: 0 },
   filterContent: { gap: MS.sm, paddingVertical: 2 },
