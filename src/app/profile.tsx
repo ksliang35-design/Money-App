@@ -4,27 +4,32 @@ import { Alert, Platform, Pressable, ScrollView, StyleSheet, Text, View } from '
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { IncomeEditModal, type IncomeModalMode } from '@/components/income-edit-modal';
+import { LanguagePicker } from '@/components/language-picker';
 import { MC, MF, MR, MS, fmt } from '@/constants/money-theme';
+import { useT } from '@/i18n';
+import type { Language } from '@/i18n';
 import { useAppData } from '@/store/AppDataProvider';
 
 export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
-  const { data, resetData } = useAppData();
+  const { data, resetData, setLanguage } = useAppData();
+  const t = useT();
   const [modalMode, setModalMode] = useState<IncomeModalMode>(null);
+  const [langPickerOpen, setLangPickerOpen] = useState(false);
 
   const handleReset = () => {
     if (Platform.OS === 'web') {
-      if (window.confirm('Reset all data?\n\nThis will restore all expenses, income, and goals to their original demo values. This cannot be undone.')) {
+      if (window.confirm(`${t('profile.resetTitle')}?\n\n${t('profile.resetMsg')}`)) {
         resetData();
       }
       return;
     }
     Alert.alert(
-      'Reset all data',
-      'This will restore all expenses, income, and goals to their original demo values. This cannot be undone.',
+      t('profile.resetTitle'),
+      t('profile.resetMsg'),
       [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Reset', style: 'destructive', onPress: resetData },
+        { text: t('common.cancel'), style: 'cancel' },
+        { text: t('profile.resetConfirm'), style: 'destructive', onPress: resetData },
       ],
     );
   };
@@ -32,10 +37,10 @@ export default function ProfileScreen() {
   const initials = data.name.slice(0, 2).toUpperCase();
 
   const STATS = [
-    { label: 'Total income', value: fmt(data.income), color: MC.emerald },
-    { label: 'Total expenses', value: fmt(data.expense), color: MC.clay },
-    { label: 'Net savings', value: fmt(data.net), color: MC.emeraldDark },
-    { label: 'Savings rate', value: `${data.savingsRate}%`, color: MC.gold },
+    { label: t('profile.totalIncome'), value: fmt(data.income), color: MC.emerald },
+    { label: t('profile.totalExpenses'), value: fmt(data.expense), color: MC.clay },
+    { label: t('profile.netSavings'), value: fmt(data.net), color: MC.emeraldDark },
+    { label: t('profile.savingsRate'), value: `${data.savingsRate}%`, color: MC.gold },
   ];
 
   return (
@@ -53,7 +58,7 @@ export default function ProfileScreen() {
             <Text style={styles.avatarText}>{initials}</Text>
           </LinearGradient>
           <Text style={styles.name}>{data.name}</Text>
-          <Text style={styles.nameSub}>{data.month} snapshot</Text>
+          <Text style={styles.nameSub}>{t('profile.snapshot', { month: data.month })}</Text>
         </View>
 
         {/* Month stats */}
@@ -69,7 +74,7 @@ export default function ProfileScreen() {
         {/* Income streams */}
         <View style={styles.card}>
           <View style={styles.cardTitleRow}>
-            <Text style={styles.cardTitle}>Income streams</Text>
+            <Text style={styles.cardTitle}>{t('profile.incomeStreams')}</Text>
             <Pressable style={styles.addBtn} onPress={() => setModalMode({ type: 'add' })}>
               <Text style={styles.addBtnText}>+</Text>
             </Pressable>
@@ -87,7 +92,7 @@ export default function ProfileScreen() {
                 <Text style={styles.incLabel}>{inc.label}</Text>
                 <View style={[styles.incBadge, { backgroundColor: inc.type === 'salary' ? MC.emerald + '20' : MC.gold + '20' }]}>
                   <Text style={[styles.incBadgeText, { color: inc.type === 'salary' ? MC.emeraldDark : '#8A6D1E' }]}>
-                    {inc.type === 'salary' ? 'Salary' : 'Side'}
+                    {inc.type === 'salary' ? t('common.salary') : t('common.side')}
                   </Text>
                 </View>
               </View>
@@ -99,29 +104,48 @@ export default function ProfileScreen() {
 
         {/* Independence goal */}
         <View style={[styles.card, styles.indepCard]}>
-          <Text style={styles.indepBadge}>🎯 INDEPENDENCE GOAL</Text>
+          <Text style={styles.indepBadge}>{t('profile.independenceGoal')}</Text>
           <Text style={styles.indepHeadline}>
-            Side income is <Text style={styles.indepNum}>{data.sideShare}%</Text> of total
+            {t('profile.independenceHeadline', { pct: data.sideShare })}
           </Text>
           <View style={styles.meterBg}>
             <View style={[styles.meterFill, { width: `${data.sideShare}%` }]} />
           </View>
           <Text style={styles.indepNote}>
             {data.sideShare < 30
-              ? `${30 - data.sideShare}% more to reach the 30% milestone — keep growing your side streams.`
-              : 'Your side income is a solid pillar of financial independence. 🎉'}
+              ? t('profile.independenceLow', { gap: 30 - data.sideShare })
+              : t('profile.independenceHigh')}
           </Text>
         </View>
 
+        {/* Language row */}
+        <Pressable style={styles.langRow} onPress={() => setLangPickerOpen(true)}>
+          <Text style={styles.langLabel}>{t('profile.language')}</Text>
+          <View style={styles.langRight}>
+            <Text style={styles.langValue}>
+              {(data as any).language === 'ms' ? 'Bahasa Malaysia' : (data as any).language === 'zh' ? '中文' : 'English'}
+            </Text>
+            <Text style={styles.langArrow}>›</Text>
+          </View>
+        </Pressable>
+
         {/* App info */}
         <View style={styles.appInfo}>
-          <Text style={styles.appInfoTitle}>Money App</Text>
-          <Text style={styles.appInfoSub}>Personal finance dashboard · mock data</Text>
-          <Text style={styles.appInfoNote}>♞ Money AI powered by Claude (coming soon)</Text>
+          <Text style={styles.appInfoTitle}>{t('profile.appName')}</Text>
+          <Text style={styles.appInfoSub}>{t('profile.appSub')}</Text>
+          <Text style={styles.appInfoNote}>{t('profile.appNote')}</Text>
           <Pressable style={styles.resetBtn} onPress={handleReset}>
-            <Text style={styles.resetTxt}>Reset to demo data</Text>
+            <Text style={styles.resetTxt}>{t('profile.reset')}</Text>
           </Pressable>
         </View>
+
+        {langPickerOpen && (
+          <LanguagePicker
+            modal
+            onSelect={(lang: Language) => setLanguage(lang)}
+            onClose={() => setLangPickerOpen(false)}
+          />
+        )}
 
         <View style={{ height: MS.xxl }} />
       </ScrollView>
@@ -241,4 +265,20 @@ const styles = StyleSheet.create({
     borderColor: MC.clay,
   },
   resetTxt: { fontSize: 12, fontFamily: MF.semiBold, color: MC.clay },
+
+  langRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: MC.card,
+    borderWidth: 1,
+    borderColor: MC.line,
+    borderRadius: MR.lg,
+    paddingHorizontal: MS.lg,
+    paddingVertical: MS.md,
+  },
+  langLabel: { fontSize: 15, fontFamily: MF.semiBold, color: MC.ink },
+  langRight: { flexDirection: 'row', alignItems: 'center', gap: MS.sm },
+  langValue: { fontSize: 13, fontFamily: MF.regular, color: MC.muted },
+  langArrow: { fontSize: 18, color: MC.muted },
 });

@@ -11,9 +11,20 @@ import { useEffect } from 'react';
 import { useColorScheme } from 'react-native';
 
 import AppTabs from '@/components/app-tabs';
-import { AppDataProvider } from '@/store/AppDataProvider';
+import { LanguagePicker } from '@/components/language-picker';
+import { AppDataProvider, useAppData } from '@/store/AppDataProvider';
+import type { Language } from '@/i18n';
 
 SplashScreen.preventAutoHideAsync();
+
+function LanguageGate() {
+  const { data, loaded, setLanguage } = useAppData();
+  if (!loaded) return null;
+  if (!data.language) {
+    return <LanguagePicker onSelect={(lang: Language) => setLanguage(lang)} />;
+  }
+  return <AppTabs />;
+}
 
 export default function TabLayout() {
   const colorScheme = useColorScheme();
@@ -34,7 +45,7 @@ export default function TabLayout() {
   return (
     <AppDataProvider>
       <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-        <AppTabs />
+        <LanguageGate />
       </ThemeProvider>
     </AppDataProvider>
   );

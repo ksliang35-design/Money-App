@@ -14,6 +14,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { MC, MF, MR, MS } from '@/constants/money-theme';
 import { type Goal } from '@/constants/mock-data';
+import { useT } from '@/i18n';
 import { useAppData } from '@/store/AppDataProvider';
 
 export type GoalModalMode =
@@ -31,6 +32,7 @@ interface Props {
 export function GoalEditModal({ mode, onClose }: Props) {
   const insets = useSafeAreaInsets();
   const { addGoal, updateGoal, deleteGoal } = useAppData();
+  const t = useT();
 
   const [label, setLabel] = useState('');
   const [target, setTarget] = useState('');
@@ -92,25 +94,25 @@ export function GoalEditModal({ mode, onClose }: Props) {
           <View style={styles.handle} />
 
           <View style={styles.header}>
-            <Text style={styles.title}>{isEdit ? 'Edit goal' : 'Add goal'}</Text>
+            <Text style={styles.title}>{isEdit ? t('goalModal.editTitle') : t('goalModal.addTitle')}</Text>
             <Pressable onPress={onClose} style={styles.closeBtn} hitSlop={12}>
               <Text style={styles.closeGlyph}>✕</Text>
             </Pressable>
           </View>
 
           <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-            <Text style={styles.fieldLabel}>Goal name</Text>
+            <Text style={styles.fieldLabel}>{t('goalModal.name')}</Text>
             <TextInput
               style={styles.input}
               value={label}
               onChangeText={setLabel}
-              placeholder="e.g. House deposit"
+              placeholder={t('goalModal.placeholder')}
               placeholderTextColor={MC.muted}
               returnKeyType="next"
               autoFocus
             />
 
-            <Text style={styles.fieldLabel}>Target amount (RM)</Text>
+            <Text style={styles.fieldLabel}>{t('goalModal.target')}</Text>
             <TextInput
               style={styles.input}
               value={target}
@@ -121,7 +123,7 @@ export function GoalEditModal({ mode, onClose }: Props) {
               returnKeyType="next"
             />
 
-            <Text style={styles.fieldLabel}>Already saved (RM)</Text>
+            <Text style={styles.fieldLabel}>{t('goalModal.saved')}</Text>
             <TextInput
               style={styles.input}
               value={saved}
@@ -133,7 +135,7 @@ export function GoalEditModal({ mode, onClose }: Props) {
               onSubmitEditing={handleSave}
             />
 
-            <Text style={styles.fieldLabel}>Icon</Text>
+            <Text style={styles.fieldLabel}>{t('goalModal.icon')}</Text>
             <View style={styles.iconGrid}>
               {ICON_OPTIONS.map((em) => (
                 <Pressable
@@ -148,14 +150,14 @@ export function GoalEditModal({ mode, onClose }: Props) {
             <View style={styles.actions}>
               {isEdit && (
                 <Pressable style={styles.deleteBtn} onPress={handleDelete}>
-                  <Text style={styles.deleteTxt}>Delete</Text>
+                  <Text style={styles.deleteTxt}>{t('goalModal.delete')}</Text>
                 </Pressable>
               )}
               <Pressable
                 style={[styles.saveBtn, !isValid && styles.saveBtnDisabled]}
                 onPress={handleSave}
                 disabled={!isValid}>
-                <Text style={styles.saveTxt}>{isEdit ? 'Save changes' : 'Add goal'}</Text>
+                <Text style={styles.saveTxt}>{isEdit ? t('goalModal.save') : t('goalModal.add')}</Text>
               </Pressable>
             </View>
           </ScrollView>

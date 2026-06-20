@@ -5,19 +5,21 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { MoneyAIOverlay } from '@/components/money-ai-overlay';
 import { MC, MF, MR, MS, fmt } from '@/constants/money-theme';
+import { useT } from '@/i18n';
 import { useAppData } from '@/store/AppDataProvider';
 
 export default function DashboardScreen() {
   const insets = useSafeAreaInsets();
   const [aiOpen, setAiOpen] = useState(false);
   const { data } = useAppData();
+  const t = useT();
 
   const maxHistNet = Math.max(...data.history.map((h) => h.net), 1);
   const sideShare = data.sideShare;
   const C = 2 * Math.PI * 46;
   const segments = [
-    { label: 'Salary', val: data.salary, color: MC.emerald },
-    { label: 'Side income', val: data.side, color: MC.gold },
+    { label: t('dashboard.salaryLabel'), val: data.salary, color: MC.emerald },
+    { label: t('dashboard.sideLabel'), val: data.side, color: MC.gold },
   ];
 
   return (
@@ -30,7 +32,7 @@ export default function DashboardScreen() {
         {/* Header */}
         <View style={styles.headerRow}>
           <View>
-            <Text style={styles.greeting}>Good morning, {data.name} 👋</Text>
+            <Text style={styles.greeting}>{t('dashboard.greeting', { name: data.name })}</Text>
             <Text style={styles.month}>{data.month}</Text>
           </View>
           <Pressable style={styles.horseBadge} onPress={() => setAiOpen(true)}>
@@ -44,20 +46,20 @@ export default function DashboardScreen() {
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={styles.hero}>
-          <Text style={styles.heroLabel}>Left over this month</Text>
+          <Text style={styles.heroLabel}>{t('dashboard.heroLabel')}</Text>
           <Text style={styles.heroBig}>{fmt(data.net)}</Text>
           <View style={styles.heroLine} />
           <View style={styles.heroRow}>
             <View>
-              <Text style={styles.heroKey}>Money in</Text>
+              <Text style={styles.heroKey}>{t('dashboard.moneyIn')}</Text>
               <Text style={styles.heroVal}>{fmt(data.income)}</Text>
             </View>
             <View>
-              <Text style={styles.heroKey}>Money out</Text>
+              <Text style={styles.heroKey}>{t('dashboard.moneyOut')}</Text>
               <Text style={styles.heroVal}>{fmt(data.expense)}</Text>
             </View>
             <View>
-              <Text style={styles.heroKey}>Saved</Text>
+              <Text style={styles.heroKey}>{t('dashboard.saved')}</Text>
               <Text style={styles.heroVal}>{data.savingsRate}%</Text>
             </View>
           </View>
@@ -66,20 +68,20 @@ export default function DashboardScreen() {
         {/* Quick stats */}
         <View style={styles.grid2}>
           <View style={styles.statCard}>
-            <Text style={styles.statKey}>Side income</Text>
+            <Text style={styles.statKey}>{t('dashboard.sideIncome')}</Text>
             <Text style={[styles.statVal, { color: MC.gold }]}>{fmt(data.side)}</Text>
           </View>
           <View style={styles.statCard}>
-            <Text style={styles.statKey}>On credit card</Text>
+            <Text style={styles.statKey}>{t('dashboard.onCard')}</Text>
             <Text style={[styles.statVal, { color: MC.clay }]}>{fmt(data.byMethod.card)}</Text>
           </View>
         </View>
 
         {/* Income split */}
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>Income split</Text>
+          <Text style={styles.cardTitle}>{t('dashboard.incomeSplit')}</Text>
           <View style={styles.donutWrap}>
-            <DonutChart segments={segments} total={data.income} C={C} centerLabel={`${sideShare}%`} centerSub="side" />
+            <DonutChart segments={segments} total={data.income} C={C} centerLabel={`${sideShare}%`} centerSub={t('dashboard.sideSub')} />
             <View style={styles.legend}>
               {segments.map((s) => (
                 <View key={s.label} style={styles.legRow}>
@@ -89,13 +91,14 @@ export default function DashboardScreen() {
                 </View>
               ))}
               <View style={[styles.indepBox]}>
-                <Text style={styles.indepTitle}>Independence meter</Text>
+                <Text style={styles.indepTitle}>{t('dashboard.indepMeter')}</Text>
                 <View style={styles.meterBg}>
                   <View style={[styles.meterFill, { width: `${Math.min(100, sideShare)}%`, backgroundColor: MC.gold }]} />
                 </View>
                 <Text style={styles.indepNote}>
-                  {sideShare}% from side streams.{' '}
-                  {sideShare < 30 ? 'Grow toward 30% for a real cushion.' : 'Strong side income pillar!'}
+                  {sideShare < 30
+                    ? t('dashboard.indepLow', { pct: sideShare })
+                    : t('dashboard.indepHigh')}
                 </Text>
               </View>
             </View>
@@ -104,7 +107,7 @@ export default function DashboardScreen() {
 
         {/* Savings history */}
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>Savings history</Text>
+          <Text style={styles.cardTitle}>{t('dashboard.savingsHistory')}</Text>
           <View style={styles.bars}>
             {data.history.map((h, i) => {
               const isCurrent = i === data.history.length - 1;
@@ -122,15 +125,15 @@ export default function DashboardScreen() {
               );
             })}
           </View>
-          <Text style={styles.barHint}>Current month highlighted in gold</Text>
+          <Text style={styles.barHint}>{t('dashboard.historyHint')}</Text>
         </View>
 
         {/* AI nudge */}
         <Pressable style={styles.aiNudge} onPress={() => setAiOpen(true)}>
           <Text style={styles.aiNudgeHorse}>♞</Text>
           <View style={styles.aiNudgeText}>
-            <Text style={styles.aiNudgeTitle}>Talk to Money AI</Text>
-            <Text style={styles.aiNudgeSub}>Ask about your spending, goals, or savings</Text>
+            <Text style={styles.aiNudgeTitle}>{t('dashboard.aiTitle')}</Text>
+            <Text style={styles.aiNudgeSub}>{t('dashboard.aiSub')}</Text>
           </View>
           <Text style={styles.aiNudgeArrow}>›</Text>
         </Pressable>

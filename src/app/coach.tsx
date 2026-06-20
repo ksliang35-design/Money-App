@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { MC, MF, MR, MS, fmt } from '@/constants/money-theme';
 import { getCoachPlan, type CoachPlan } from '@/lib/coach';
+import { useT } from '@/i18n';
 import { useAppData } from '@/store/AppDataProvider';
 
 type Step = 1 | 2 | 3 | 'done';
@@ -15,6 +16,7 @@ interface Answers {
   goal: string | null;
 }
 
+// Values sent to Gemini always stay in English
 const AGE_OPTIONS = ['Under 25', '25–34', '35–44', '45–54', '55+'];
 
 const INCOME_BRACKETS = [
@@ -25,11 +27,12 @@ const INCOME_BRACKETS = [
   { label: 'Over RM 12,000', min: 12000, max: Infinity },
 ];
 
+// value = sent to Gemini (English), labelKey = translated display key
 const GOAL_OPTIONS = [
-  { label: 'Build savings', icon: '🛡️' },
-  { label: 'Clear debt', icon: '✂️' },
-  { label: 'Start investing', icon: '📈' },
-  { label: 'Just get organized', icon: '📋' },
+  { value: 'Build savings', labelKey: 'coach.goalBuildSavings', icon: '🛡️' },
+  { value: 'Clear debt', labelKey: 'coach.goalClearDebt', icon: '✂️' },
+  { value: 'Start investing', labelKey: 'coach.goalStartInvesting', icon: '📈' },
+  { value: 'Just get organized', labelKey: 'coach.goalGetOrganized', icon: '📋' },
 ];
 
 function incomeToBracket(income: number): string {
@@ -40,6 +43,7 @@ function incomeToBracket(income: number): string {
 export default function CoachScreen() {
   const insets = useSafeAreaInsets();
   const { data, saveCoachResult, clearCoachResult } = useAppData();
+  const t = useT();
 
   const [step, setStep] = useState<Step>(data.coachPlan ? 'done' : 1);
   const [answers, setAnswers] = useState<Answers>(
@@ -75,9 +79,9 @@ export default function CoachScreen() {
     }
   };
 
-  const handleGoal = (goal: string) => {
-    const finalAnswers = { age: answers.age!, incomeBracket: answers.incomeBracket!, goal };
-    setAnswers((a) => ({ ...a, goal }));
+  const handleGoal = (value: string) => {
+    const finalAnswers = { age: answers.age!, incomeBracket: answers.incomeBracket!, goal: value };
+    setAnswers((a) => ({ ...a, goal: value }));
     setStep('done');
     fetchPlan(finalAnswers);
   };
@@ -103,8 +107,8 @@ export default function CoachScreen() {
         contentContainerStyle={[styles.content, { paddingTop: insets.top + 8 }]}
         showsVerticalScrollIndicator={false}>
 
-        <Text style={styles.screenTitle}>Budget Coach</Text>
-        <Text style={styles.screenSub}>Personalised guidance in seconds</Text>
+        <Text style={styles.screenTitle}>{t('coach.title')}</Text>
+        <Text style={styles.screenSub}>{t('coach.sub')}</Text>
 
         {/* Step progress bar */}
         {step !== 'done' && (
@@ -121,9 +125,9 @@ export default function CoachScreen() {
         {/* Q1: Age range */}
         {step === 1 && (
           <View style={styles.card}>
-            <Text style={styles.stepBadge}>QUESTION 1 OF 3</Text>
-            <Text style={styles.question}>What's your age range?</Text>
-            <Text style={styles.questionSub}>Helps us tailor advice to your life stage.</Text>
+            <Text style={styles.stepBadge}>{t('coach.q1badge')}</Text>
+            <Text style={styles.question}>{t('coach.q1')}</Text>
+            <Text style={styles.questionSub}>{t('coach.q1sub')}</Text>
             <View style={styles.optList}>
               {AGE_OPTIONS.map((opt) => (
                 <Pressable
@@ -146,12 +150,9 @@ export default function CoachScreen() {
         {/* Q2: Income bracket */}
         {step === 2 && (
           <View style={styles.card}>
-            <Text style={styles.stepBadge}>QUESTION 2 OF 3</Text>
-            <Text style={styles.question}>Monthly take-home income?</Text>
-            <Text style={styles.questionSub}>
-              We've highlighted the bracket that matches your income streams.
-              Tap to confirm or choose a different one.
-            </Text>
+            <Text style={styles.stepBadge}>{t('coach.q2badge')}</Text>
+            <Text style={styles.question}>{t('coach.q2')}</Text>
+            <Text style={styles.questionSub}>{t('coach.q2sub')}</Text>
             <View style={styles.optList}>
               {INCOME_BRACKETS.map((b) => {
                 const active = b.label === suggestedBracket;
@@ -171,7 +172,7 @@ export default function CoachScreen() {
                       <Text style={[styles.optLabel, active && styles.optLabelActive]}>
                         {b.label}
                       </Text>
-                      {active && <Text style={styles.optTag}>Your current total</Text>}
+                      {active && <Text style={styles.optTag}>{t('coach.currentTotal')}</Text>}
                     </View>
                     <Text style={[styles.optChevron, active && styles.optChevronActive]}>›</Text>
                   </Pressable>
@@ -184,18 +185,18 @@ export default function CoachScreen() {
         {/* Q3: Main goal */}
         {step === 3 && (
           <View style={styles.card}>
-            <Text style={styles.stepBadge}>QUESTION 3 OF 3</Text>
-            <Text style={styles.question}>What's your main focus?</Text>
-            <Text style={styles.questionSub}>We'll shape your plan around this priority.</Text>
+            <Text style={styles.stepBadge}>{t('coach.q3badge')}</Text>
+            <Text style={styles.question}>{t('coach.q3')}</Text>
+            <Text style={styles.questionSub}>{t('coach.q3sub')}</Text>
             <View style={styles.optList}>
               {GOAL_OPTIONS.map((opt) => (
                 <Pressable
-                  key={opt.label}
+                  key={opt.value}
                   style={({ pressed }) => [styles.optBtn, pressed && styles.optBtnPressed]}
-                  onPress={() => handleGoal(opt.label)}>
+                  onPress={() => handleGoal(opt.value)}>
                   <Text style={styles.optIcon}>{opt.icon}</Text>
                   <View style={styles.optLabelWrap}>
-                    <Text style={styles.optLabel}>{opt.label}</Text>
+                    <Text style={styles.optLabel}>{t(opt.labelKey)}</Text>
                   </View>
                   <Text style={styles.optChevron}>›</Text>
                 </Pressable>
@@ -209,11 +210,11 @@ export default function CoachScreen() {
           <>
             {/* Answers recap */}
             <View style={styles.summaryCard}>
-              <Text style={styles.summaryTitle}>Your profile</Text>
+              <Text style={styles.summaryTitle}>{t('coach.yourProfile')}</Text>
               {[
-                { key: 'Age range', val: answers.age },
-                { key: 'Income bracket', val: answers.incomeBracket },
-                { key: 'Main goal', val: answers.goal },
+                { key: t('coach.ageRange'), val: answers.age },
+                { key: t('coach.incomeBracket'), val: answers.incomeBracket },
+                { key: t('coach.mainGoal'), val: answers.goal },
               ].map((row) => (
                 <View key={row.key} style={styles.summaryRow}>
                   <Text style={styles.summaryKey}>{row.key}</Text>
@@ -226,7 +227,7 @@ export default function CoachScreen() {
             {loading && (
               <View style={styles.loadingCard}>
                 <ActivityIndicator size="large" color={MC.indigo} />
-                <Text style={styles.loadingText}>Building your personalised plan…</Text>
+                <Text style={styles.loadingText}>{t('coach.loading')}</Text>
               </View>
             )}
 
@@ -234,24 +235,19 @@ export default function CoachScreen() {
             {!loading && error === 'NO_API_KEY' && (
               <View style={styles.noKeyCard}>
                 <Text style={styles.noKeyIcon}>🔑</Text>
-                <Text style={styles.noKeyTitle}>API key not set</Text>
-                <Text style={styles.noKeyMsg}>
-                  Open the <Text style={styles.noKeyCode}>.env</Text> file in the project root and
-                  paste your Anthropic API key after{'\n'}
-                  <Text style={styles.noKeyCode}>EXPO_PUBLIC_ANTHROPIC_API_KEY=</Text>
-                  {'\n\n'}Then restart the dev server.
-                </Text>
+                <Text style={styles.noKeyTitle}>{t('coach.noKeyTitle')}</Text>
+                <Text style={styles.noKeyMsg}>{t('coach.noKeyMsg')}</Text>
               </View>
             )}
             {!loading && error && error !== 'NO_API_KEY' && (
               <View style={styles.errorCard}>
                 <Text style={styles.errorIcon}>⚠️</Text>
-                <Text style={styles.errorTitle}>Couldn't load your plan</Text>
+                <Text style={styles.errorTitle}>{t('coach.errorTitle')}</Text>
                 <Text style={styles.errorMsg}>{error}</Text>
                 <Pressable
                   style={({ pressed }) => [styles.retryBtn, pressed && { opacity: 0.7 }]}
                   onPress={handleRetry}>
-                  <Text style={styles.retryTxt}>Try again</Text>
+                  <Text style={styles.retryTxt}>{t('common.tryAgain')}</Text>
                 </Pressable>
               </View>
             )}
@@ -266,14 +262,14 @@ export default function CoachScreen() {
                   end={{ x: 1, y: 1 }}
                   style={styles.modelCard}>
                   <Text style={styles.modelName}>{plan.model}</Text>
-                  <Text style={styles.modelSubLabel}>Recommended budget model</Text>
+                  <Text style={styles.modelSubLabel}>{t('coach.recBudgetModel')}</Text>
                   <View style={styles.modelDivider} />
                   <Text style={styles.modelWhy}>{plan.why}</Text>
                 </LinearGradient>
 
                 {/* Budget breakdown */}
                 <View style={styles.card}>
-                  <Text style={styles.sectionLabel}>BUDGET BREAKDOWN</Text>
+                  <Text style={styles.sectionLabel}>{t('coach.budgetBreakdown')}</Text>
                   {plan.buckets.map((bucket, i) => {
                     const pct =
                       bucket.targetRM > 0
@@ -291,7 +287,7 @@ export default function CoachScreen() {
                         <View style={styles.bucketHeader}>
                           <Text style={styles.bucketLabel}>{bucket.label}</Text>
                           <Text style={[styles.bucketStatus, { color: fillColor }]}>
-                            {over ? '↑ over budget' : '✓ on track'}
+                            {over ? t('coach.overBudget') : t('coach.onTrack')}
                           </Text>
                         </View>
                         <View style={styles.meterBg}>
@@ -304,12 +300,12 @@ export default function CoachScreen() {
                         </View>
                         <View style={styles.bucketNums}>
                           <Text style={styles.bucketNum}>
-                            Actual{' '}
+                            {t('coach.actual')}{' '}
                             <Text style={{ color: fillColor, fontFamily: MF.bold }}>
                               {fmt(bucket.actualRM)}
                             </Text>
                           </Text>
-                          <Text style={styles.bucketNum}>Target {fmt(bucket.targetRM)}</Text>
+                          <Text style={styles.bucketNum}>{t('coach.target2')} {fmt(bucket.targetRM)}</Text>
                         </View>
                       </View>
                     );
@@ -318,7 +314,7 @@ export default function CoachScreen() {
 
                 {/* Next action */}
                 <View style={[styles.card, styles.actionCard]}>
-                  <Text style={styles.actionBadge}>✦ THIS WEEK</Text>
+                  <Text style={styles.actionBadge}>{t('coach.thisWeek')}</Text>
                   <Text style={styles.actionText}>{plan.nextAction}</Text>
                 </View>
 
@@ -327,16 +323,14 @@ export default function CoachScreen() {
                   <Text style={styles.encourageText}>"{plan.encouragement}"</Text>
                 </View>
 
-                <Text style={styles.disclaimer}>
-                  ♞ Not licensed financial advice. For investment decisions, consult a certified financial planner.
-                </Text>
+                <Text style={styles.disclaimer}>{t('coach.disclaimer')}</Text>
               </>
             )}
 
             <Pressable
               style={({ pressed }) => [styles.restartBtn, pressed && { opacity: 0.6 }]}
               onPress={handleRestart}>
-              <Text style={styles.restartTxt}>Start over</Text>
+              <Text style={styles.restartTxt}>{t('coach.startOver')}</Text>
             </Pressable>
           </>
         )}

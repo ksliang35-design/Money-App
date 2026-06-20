@@ -4,16 +4,17 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { MC, MF } from '@/constants/money-theme';
-
-const TABS = [
-  { name: 'home', href: '/' as const, icon: '⊞', label: 'Home' },
-  { name: 'expenses', href: '/expenses' as const, icon: '💸', label: 'Expenses' },
-  { name: 'invest', href: '/invest' as const, icon: '📈', label: 'Invest' },
-  { name: 'coach', href: '/coach' as const, icon: '🧭', label: 'Coach' },
-  { name: 'profile', href: '/profile' as const, icon: '👤', label: 'Profile' },
-] as const;
+import { useT } from '@/i18n';
 
 export default function AppTabs() {
+  const t = useT();
+  const TABS = [
+    { name: 'home', href: '/', icon: '⊞', label: t('tabs.home') },
+    { name: 'expenses', href: '/expenses', icon: '💸', label: t('tabs.expenses') },
+    { name: 'invest', href: '/invest', icon: '📈', label: t('tabs.invest') },
+    { name: 'coach', href: '/coach', icon: '🧭', label: t('tabs.coach') },
+    { name: 'profile', href: '/profile', icon: '👤', label: t('tabs.profile') },
+  ];
   return (
     <Tabs style={styles.root}>
       <TabSlot style={styles.slot} />

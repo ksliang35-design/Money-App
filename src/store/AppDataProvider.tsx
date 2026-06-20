@@ -4,6 +4,7 @@ import type { ReactNode } from 'react';
 
 import { MOCK, type Expense, type Goal, type Income, type HistoryEntry } from '@/constants/mock-data';
 import type { CoachProfile, CoachPlan } from '@/lib/coach';
+import type { Language } from '@/i18n';
 
 const STORAGE_KEY = 'money-hub-data';
 
@@ -16,6 +17,7 @@ interface RawData {
   history: HistoryEntry[];
   coachProfile: CoachProfile | null;
   coachPlan: CoachPlan | null;
+  language: Language | null;
 }
 
 export interface DerivedData extends RawData {
@@ -31,6 +33,7 @@ export interface DerivedData extends RawData {
 
 interface AppDataContextValue {
   data: DerivedData;
+  loaded: boolean;
   updateExpense: (id: string, updates: Partial<Omit<Expense, 'id'>>) => void;
   addExpense: (expense: Omit<Expense, 'id'>) => void;
   deleteExpense: (id: string) => void;
@@ -43,6 +46,7 @@ interface AppDataContextValue {
   resetData: () => void;
   saveCoachResult: (profile: CoachProfile, plan: CoachPlan) => void;
   clearCoachResult: () => void;
+  setLanguage: (lang: Language) => void;
 }
 
 const defaultRaw: RawData = {
@@ -54,6 +58,7 @@ const defaultRaw: RawData = {
   history: MOCK.history,
   coachProfile: null,
   coachPlan: null,
+  language: null,
 };
 
 function derive(raw: RawData): DerivedData {
@@ -103,6 +108,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
 
   const value: AppDataContextValue = {
     data: derive(raw),
+    loaded,
 
     updateExpense: (id, updates) =>
       setRaw((r) => ({
@@ -149,6 +155,8 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       setRaw((r) => ({ ...r, coachProfile: profile, coachPlan: plan })),
     clearCoachResult: () =>
       setRaw((r) => ({ ...r, coachProfile: null, coachPlan: null })),
+    setLanguage: (lang) =>
+      setRaw((r) => ({ ...r, language: lang })),
   };
 
   return <AppDataContext.Provider value={value}>{children}</AppDataContext.Provider>;

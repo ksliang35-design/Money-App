@@ -13,6 +13,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { MC, MF, MR, MS } from '@/constants/money-theme';
 import { type Expense } from '@/constants/mock-data';
+import { useT } from '@/i18n';
 import { useAppData } from '@/store/AppDataProvider';
 
 type Method = 'card' | 'ewallet' | 'cash' | 'bank';
@@ -22,11 +23,11 @@ export type ExpenseModalMode =
   | { type: 'add' }
   | null;
 
-const METHOD_META: Record<Method, { label: string; icon: string; color: string }> = {
-  card:    { label: 'Card',     icon: '💳', color: MC.clay    },
-  ewallet: { label: 'E-wallet', icon: '📱', color: MC.indigo  },
-  cash:    { label: 'Cash',     icon: '💵', color: MC.emerald },
-  bank:    { label: 'Bank',     icon: '🏦', color: MC.gold    },
+const METHOD_ICONS: Record<Method, { icon: string; color: string }> = {
+  card:    { icon: '💳', color: MC.clay    },
+  ewallet: { icon: '📱', color: MC.indigo  },
+  cash:    { icon: '💵', color: MC.emerald },
+  bank:    { icon: '🏦', color: MC.gold    },
 };
 
 interface Props {
@@ -37,6 +38,14 @@ interface Props {
 export function ExpenseEditModal({ mode, onClose }: Props) {
   const insets = useSafeAreaInsets();
   const { addExpense, updateExpense, deleteExpense } = useAppData();
+  const t = useT();
+
+  const METHOD_META: Record<Method, { label: string; icon: string; color: string }> = {
+    card:    { label: t('expenseModal.methodCard'),    ...METHOD_ICONS.card    },
+    ewallet: { label: t('expenseModal.methodEwallet'), ...METHOD_ICONS.ewallet },
+    cash:    { label: t('expenseModal.methodCash'),    ...METHOD_ICONS.cash    },
+    bank:    { label: t('expenseModal.methodBank'),    ...METHOD_ICONS.bank    },
+  };
 
   const [label, setLabel] = useState('');
   const [amount, setAmount] = useState('');
@@ -90,24 +99,24 @@ export function ExpenseEditModal({ mode, onClose }: Props) {
           <View style={styles.handle} />
 
           <View style={styles.header}>
-            <Text style={styles.title}>{isEdit ? 'Edit expense' : 'Add expense'}</Text>
+            <Text style={styles.title}>{isEdit ? t('expenseModal.editTitle') : t('expenseModal.addTitle')}</Text>
             <Pressable onPress={onClose} style={styles.closeBtn} hitSlop={12}>
               <Text style={styles.closeGlyph}>✕</Text>
             </Pressable>
           </View>
 
-          <Text style={styles.fieldLabel}>Description</Text>
+          <Text style={styles.fieldLabel}>{t('expenseModal.description')}</Text>
           <TextInput
             style={styles.input}
             value={label}
             onChangeText={setLabel}
-            placeholder="e.g. Groceries"
+            placeholder={t('expenseModal.placeholder')}
             placeholderTextColor={MC.muted}
             returnKeyType="next"
             autoFocus
           />
 
-          <Text style={styles.fieldLabel}>Amount (RM)</Text>
+          <Text style={styles.fieldLabel}>{t('expenseModal.amount')}</Text>
           <TextInput
             style={styles.input}
             value={amount}
@@ -119,7 +128,7 @@ export function ExpenseEditModal({ mode, onClose }: Props) {
             onSubmitEditing={handleSave}
           />
 
-          <Text style={styles.fieldLabel}>Payment method</Text>
+          <Text style={styles.fieldLabel}>{t('expenseModal.method')}</Text>
           <View style={styles.methodRow}>
             {(Object.entries(METHOD_META) as [Method, (typeof METHOD_META)[Method]][]).map(
               ([key, m]) => {
@@ -149,14 +158,14 @@ export function ExpenseEditModal({ mode, onClose }: Props) {
           <View style={styles.actions}>
             {isEdit && (
               <Pressable style={styles.deleteBtn} onPress={handleDelete}>
-                <Text style={styles.deleteTxt}>Delete</Text>
+                <Text style={styles.deleteTxt}>{t('common.delete')}</Text>
               </Pressable>
             )}
             <Pressable
               style={[styles.saveBtn, !isValid && styles.saveBtnDisabled]}
               onPress={handleSave}
               disabled={!isValid}>
-              <Text style={styles.saveTxt}>{isEdit ? 'Save changes' : 'Add expense'}</Text>
+              <Text style={styles.saveTxt}>{isEdit ? t('expenseModal.save') : t('expenseModal.add')}</Text>
             </Pressable>
           </View>
         </View>

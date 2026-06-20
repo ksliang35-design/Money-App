@@ -6,9 +6,11 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { GoalEditModal, type GoalModalMode } from '@/components/goal-edit-modal';
 import { MC, MF, MR, MS, fmt } from '@/constants/money-theme';
 import { type Goal } from '@/constants/mock-data';
+import { useT } from '@/i18n';
 import { useAppData } from '@/store/AppDataProvider';
 
 function GoalCard({ goal, monthlyNet, onPress }: { goal: Goal; monthlyNet: number; onPress: () => void }) {
+  const t = useT();
   const pct = goal.target > 0 ? Math.min(100, (goal.saved / goal.target) * 100) : 0;
   const remaining = Math.max(0, goal.target - goal.saved);
   const monthsLeft = monthlyNet > 0 && remaining > 0
@@ -26,7 +28,7 @@ function GoalCard({ goal, monthlyNet, onPress }: { goal: Goal; monthlyNet: numbe
         <View style={styles.goalInfo}>
           <Text style={styles.goalLabel}>{goal.label}</Text>
           <Text style={styles.goalSub}>
-            {fmt(goal.saved)} of {fmt(goal.target)}
+            {fmt(goal.saved)} / {fmt(goal.target)}
           </Text>
         </View>
         <View style={[styles.pctBadge, { backgroundColor: fillColor + '18' }]}>
@@ -44,9 +46,9 @@ function GoalCard({ goal, monthlyNet, onPress }: { goal: Goal; monthlyNet: numbe
       </View>
 
       <View style={styles.goalFooter}>
-        <Text style={styles.goalRemain}>{fmt(remaining)} to go</Text>
+        <Text style={styles.goalRemain}>{t('invest.toGo', { amt: fmt(remaining) })}</Text>
         {monthsLeft !== null && (
-          <Text style={styles.goalTime}>~{monthsLeft} mo at 25% of surplus</Text>
+          <Text style={styles.goalTime}>{t('invest.moAtPct', { n: monthsLeft })}</Text>
         )}
       </View>
     </Pressable>
@@ -56,6 +58,7 @@ function GoalCard({ goal, monthlyNet, onPress }: { goal: Goal; monthlyNet: numbe
 export default function InvestScreen() {
   const insets = useSafeAreaInsets();
   const { data } = useAppData();
+  const t = useT();
   const [modalMode, setModalMode] = useState<GoalModalMode>(null);
 
   const MONTHLY_SURPLUS = data.net;
@@ -71,8 +74,8 @@ export default function InvestScreen() {
         showsVerticalScrollIndicator={false}>
 
         {/* Header */}
-        <Text style={styles.screenTitle}>Invest & Goals</Text>
-        <Text style={styles.screenSub}>Track your savings targets</Text>
+        <Text style={styles.screenTitle}>{t('invest.title')}</Text>
+        <Text style={styles.screenSub}>{t('invest.sub')}</Text>
 
         {/* Overview hero */}
         <LinearGradient
@@ -80,20 +83,20 @@ export default function InvestScreen() {
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={styles.hero}>
-          <Text style={styles.heroLabel}>Total saved across goals</Text>
+          <Text style={styles.heroLabel}>{t('invest.heroLabel')}</Text>
           <Text style={styles.heroBig}>{fmt(totalSaved)}</Text>
           <View style={styles.heroLine} />
           <View style={styles.heroRow}>
             <View>
-              <Text style={styles.heroKey}>Target</Text>
+              <Text style={styles.heroKey}>{t('invest.target')}</Text>
               <Text style={styles.heroVal}>{fmt(totalTarget)}</Text>
             </View>
             <View>
-              <Text style={styles.heroKey}>Remaining</Text>
+              <Text style={styles.heroKey}>{t('invest.remaining')}</Text>
               <Text style={styles.heroVal}>{fmt(totalTarget - totalSaved)}</Text>
             </View>
             <View>
-              <Text style={styles.heroKey}>Overall</Text>
+              <Text style={styles.heroKey}>{t('invest.overall')}</Text>
               <Text style={styles.heroVal}>{overallPct}%</Text>
             </View>
           </View>
@@ -102,17 +105,17 @@ export default function InvestScreen() {
         {/* Monthly surplus card */}
         <View style={styles.surplusCard}>
           <View style={styles.surplusLeft}>
-            <Text style={styles.surplusLabel}>Monthly surplus available</Text>
+            <Text style={styles.surplusLabel}>{t('invest.surplusLabel')}</Text>
             <Text style={styles.surplusAmt}>{fmt(MONTHLY_SURPLUS)}</Text>
           </View>
           <View style={styles.surplusTip}>
-            <Text style={styles.surplusTipText}>Allocate 25% → {fmt(MONTHLY_SURPLUS * 0.25)}/mo per goal</Text>
+            <Text style={styles.surplusTipText}>{t('invest.surplusTip', { amt: fmt(MONTHLY_SURPLUS * 0.25) })}</Text>
           </View>
         </View>
 
         {/* Goals */}
         <View style={styles.sectionRow}>
-          <Text style={styles.sectionTitle}>Your savings goals</Text>
+          <Text style={styles.sectionTitle}>{t('invest.savingsGoals')}</Text>
           <Pressable style={styles.addBtn} onPress={() => setModalMode({ type: 'add' })}>
             <Text style={styles.addBtnText}>+</Text>
           </Pressable>
@@ -128,33 +131,32 @@ export default function InvestScreen() {
 
         {/* Disclaimer */}
         <View style={styles.disclaimer}>
-          <Text style={styles.disclaimerText}>
-            ♞ These are savings goals, not investment advice. Consult a licensed financial advisor before any investment decision.
-          </Text>
+          <Text style={styles.disclaimerText}>{t('invest.disclaimer')}</Text>
         </View>
 
         {/* Side hustle calculator */}
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>📊 Side hustle impact</Text>
+          <Text style={styles.cardTitle}>{t('invest.sideImpact')}</Text>
           <Text style={styles.calcSub}>
-            Your side income ({fmt(data.side)}/mo) contributes{' '}
-            <Text style={styles.calcHighlight}>{data.sideShare}%</Text> of total income.
+            {t('invest.sideImpactBody', { side: fmt(data.side), pct: data.sideShare })}
           </Text>
           <View style={styles.calcRows}>
             <View style={styles.calcRow}>
-              <Text style={styles.calcRowLabel}>If side income doubles</Text>
-              <Text style={[styles.calcRowVal, { color: MC.emerald }]}>{fmt(data.side * 2)}/mo extra</Text>
+              <Text style={styles.calcRowLabel}>{t('invest.ifDoubles')}</Text>
+              <Text style={[styles.calcRowVal, { color: MC.emerald }]}>
+                {t('invest.extraPerMo', { amt: fmt(data.side * 2) })}
+              </Text>
             </View>
             <View style={styles.calcRow}>
-              <Text style={styles.calcRowLabel}>Emergency fund in</Text>
+              <Text style={styles.calcRowLabel}>{t('invest.emergencyFund')}</Text>
               <Text style={[styles.calcRowVal, { color: MC.gold }]}>
-                {Math.ceil((12000 - 3000) / (data.net * 0.25))} months
+                {t('invest.months', { n: Math.ceil((12000 - 3000) / (data.net * 0.25)) })}
               </Text>
             </View>
             <View style={[styles.calcRow, { borderBottomWidth: 0 }]}>
-              <Text style={styles.calcRowLabel}>Business capital in</Text>
+              <Text style={styles.calcRowLabel}>{t('invest.businessCapital')}</Text>
               <Text style={[styles.calcRowVal, { color: MC.indigo }]}>
-                {Math.ceil((5000 - 600) / (data.net * 0.15))} months
+                {t('invest.months', { n: Math.ceil((5000 - 600) / (data.net * 0.15)) })}
               </Text>
             </View>
           </View>

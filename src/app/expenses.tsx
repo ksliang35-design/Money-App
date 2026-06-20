@@ -1,35 +1,65 @@
 import { LinearGradient } from 'expo-linear-gradient';
 import { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import {
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ExpenseEditModal, type ExpenseModalMode } from '@/components/expense-edit-modal';
 import { MC, MF, MR, MS, fmt } from '@/constants/money-theme';
 import { type Expense } from '@/constants/mock-data';
+import { parseExpense, type ParsedExpense } from '@/lib/quickadd';
+import { useT } from '@/i18n';
 import { useAppData } from '@/store/AppDataProvider';
 
 type Method = 'all' | 'card' | 'ewallet' | 'cash' | 'bank';
+type ExpenseMethod = 'card' | 'ewallet' | 'cash' | 'bank';
 
-const METHODS: Record<string, { label: string; icon: string; color: string }> = {
-  card: { label: 'Credit Card', icon: '💳', color: MC.clay },
-  ewallet: { label: 'E-wallet', icon: '📱', color: MC.indigo },
-  cash: { label: 'Cash', icon: '💵', color: MC.emerald },
-  bank: { label: 'Bank/Debit', icon: '🏦', color: MC.gold },
+const METHOD_ICONS: Record<string, { icon: string; color: string }> = {
+  card: { icon: '💳', color: MC.clay },
+  ewallet: { icon: '📱', color: MC.indigo },
+  cash: { icon: '💵', color: MC.emerald },
+  bank: { icon: '🏦', color: MC.gold },
 };
-
-const FILTER_OPTIONS: { key: Method; label: string }[] = [
-  { key: 'all', label: 'All' },
-  { key: 'card', label: '💳 Card' },
-  { key: 'ewallet', label: '📱 E-wallet' },
-  { key: 'cash', label: '💵 Cash' },
-  { key: 'bank', label: '🏦 Bank' },
-];
 
 export default function ExpensesScreen() {
   const insets = useSafeAreaInsets();
   const [filter, setFilter] = useState<Method>('all');
   const [modalMode, setModalMode] = useState<ExpenseModalMode>(null);
-  const { data } = useAppData();
+  const { data, addExpense } = useAppData();
+  const t = useT();
+
+  const METHODS: Record<string, { label: string; icon: string; color: string }> = {
+    card: { label: t('expenses.methodCard'), icon: '💳', color: MC.clay },
+    ewallet: { label: t('expenses.methodEwallet'), icon: '📱', color: MC.indigo },
+    cash: { label: t('expenses.methodCash'), icon: '💵', color: MC.emerald },
+    bank: { label: t('expenses.methodBank'), icon: '🏦', color: MC.gold },
+  };
+
+  const FILTER_OPTIONS: { key: Method; label: string }[] = [
+    { key: 'all', label: t('expenses.filterAll') },
+    { key: 'card', label: t('expenses.filterCard') },
+    { key: 'ewallet', label: t('expenses.filterEwallet') },
+    { key: 'cash', label: t('expenses.filterCash') },
+    { key: 'bank', label: t('expenses.filterBank') },
+  ];
+
+  // Quick Add state
+  const [quickOpen, setQuickOpen] = useState(false);
+  const [qaText, setQaText] = useState('');
+  const [qaLoading, setQaLoading] = useState(false);
+  const [qaResult, setQaResult] = useState<ParsedExpense | null>(null);
+  const [qaMethod, setQaMethod] = useState<ExpenseMethod>('card');
+  const [qaError, setQaError] = useState<string | null>(null);
 
   const shown: Expense[] =
     filter === 'all'
@@ -38,6 +68,38 @@ export default function ExpensesScreen() {
 
   const cardTotal = data.byMethod.card;
   const cardPct = Math.round((cardTotal / data.expense) * 100);
+
+  function handleQuickClose() {
+    setQuickOpen(false);
+    setQaText('');
+    setQaLoading(false);
+    setQaResult(null);
+    setQaError(null);
+  }
+
+  async function handleParse() {
+    if (!qaText.trim() || qaLoading) return;
+    setQaLoading(true);
+    setQaResult(null);
+    setQaError(null);
+    try {
+      const result = await parseExpense(qaText.trim());
+      setQaResult(result);
+      if (result.isExpense && result.method) {
+        setQaMethod(result.method as ExpenseMethod);
+      }
+    } catch (e: any) {
+      setQaError(e?.message ?? 'Parse failed');
+    } finally {
+      setQaLoading(false);
+    }
+  }
+
+  function handleQuickConfirm() {
+    if (!qaResult?.isExpense) return;
+    addExpense({ label: qaResult.label, amount: qaResult.amount, method: qaMethod });
+    handleQuickClose();
+  }
 
   return (
     <View style={styles.root}>
@@ -49,14 +111,21 @@ export default function ExpensesScreen() {
         {/* Header */}
         <View style={styles.headerRow}>
           <View>
-            <Text style={styles.screenTitle}>Expenses</Text>
-            <Text style={styles.screenSub}>{data.month} · {fmt(data.expense)} total</Text>
+            <Text style={styles.screenTitle}>{t('expenses.title')}</Text>
+            <Text style={styles.screenSub}>{data.month} · {fmt(data.expense)}</Text>
           </View>
-          <Pressable
-            style={styles.addBtn}
-            onPress={() => setModalMode({ type: 'add' })}>
-            <Text style={styles.addBtnText}>+</Text>
-          </Pressable>
+          <View style={styles.headerBtns}>
+            <Pressable
+              style={styles.quickAddBtn}
+              onPress={() => setQuickOpen(true)}>
+              <Text style={styles.quickAddBtnText}>{t('expenses.quickAdd')}</Text>
+            </Pressable>
+            <Pressable
+              style={styles.addBtn}
+              onPress={() => setModalMode({ type: 'add' })}>
+              <Text style={styles.addBtnText}>+</Text>
+            </Pressable>
+          </View>
         </View>
 
         {/* Card spotlight */}
@@ -65,9 +134,9 @@ export default function ExpensesScreen() {
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={styles.cardSpot}>
-          <Text style={styles.spotTop}>💳 On credit card</Text>
+          <Text style={styles.spotTop}>{t('expenses.onCard')}</Text>
           <Text style={styles.spotAmt}>{fmt(cardTotal)}</Text>
-          <Text style={styles.spotSub}>{cardPct}% of spending · this is what you'll owe</Text>
+          <Text style={styles.spotSub}>{t('expenses.cardNote', { pct: cardPct })}</Text>
         </LinearGradient>
 
         {/* By method grid */}
@@ -95,7 +164,9 @@ export default function ExpensesScreen() {
         {/* Expense list */}
         <View style={styles.card}>
           <Text style={styles.cardTitle}>
-            {filter === 'all' ? 'All expenses' : `${METHODS[filter]?.label ?? ''} expenses`}
+            {filter === 'all'
+              ? t('expenses.allExpenses')
+              : t('expenses.methodExpenses', { method: METHODS[filter]?.label ?? '' })}
           </Text>
           {shown.map((e, i) => {
             const m = METHODS[e.method];
@@ -123,13 +194,17 @@ export default function ExpensesScreen() {
             );
           })}
           {shown.length === 0 && (
-            <Text style={styles.emptyText}>No expenses in this category.</Text>
+            <Text style={styles.emptyText}>{t('expenses.empty')}</Text>
           )}
         </View>
 
         {/* Total row */}
         <View style={styles.totalRow}>
-          <Text style={styles.totalLabel}>Total {filter === 'all' ? 'expenses' : METHODS[filter]?.label}</Text>
+          <Text style={styles.totalLabel}>
+            {filter === 'all'
+              ? t('expenses.totalAll')
+              : t('expenses.totalMethod', { method: METHODS[filter]?.label ?? '' })}
+          </Text>
           <Text style={styles.totalAmt}>
             {fmt(shown.reduce((s, e) => s + e.amount, 0))}
           </Text>
@@ -142,6 +217,114 @@ export default function ExpensesScreen() {
         mode={modalMode}
         onClose={() => setModalMode(null)}
       />
+
+      {/* Quick Add Modal */}
+      <Modal
+        visible={quickOpen}
+        transparent
+        animationType="slide"
+        onRequestClose={handleQuickClose}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={qa.overlay}>
+          <Pressable style={qa.backdrop} onPress={handleQuickClose} />
+          <View style={[qa.sheet, { paddingBottom: insets.bottom + MS.lg }]}>
+            <View style={qa.handle} />
+
+            <View style={qa.header}>
+              <View>
+                <Text style={qa.title}>{t('expenses.qaTitle')}</Text>
+                <Text style={qa.subtitle}>{t('expenses.qaSubtitle')}</Text>
+              </View>
+              <Pressable onPress={handleQuickClose} style={qa.closeBtn} hitSlop={12}>
+                <Text style={qa.closeGlyph}>✕</Text>
+              </Pressable>
+            </View>
+
+            <TextInput
+              style={qa.input}
+              value={qaText}
+              onChangeText={(t) => { setQaText(t); setQaResult(null); setQaError(null); }}
+              placeholder={t('expenses.qaPlaceholder')}
+              placeholderTextColor={MC.muted}
+              multiline
+              numberOfLines={3}
+              autoFocus
+              editable={!qaLoading}
+            />
+
+            <Pressable
+              style={[qa.parseBtn, (!qaText.trim() || qaLoading) && qa.parseBtnDisabled]}
+              onPress={handleParse}
+              disabled={!qaText.trim() || qaLoading}>
+              {qaLoading ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <Text style={qa.parseBtnText}>{t('expenses.qaParse')}</Text>
+              )}
+            </Pressable>
+
+            {qaError === 'NO_API_KEY' && (
+              <View style={qa.infoCard}>
+                <Text style={qa.infoIcon}>🔑</Text>
+                <Text style={qa.infoText}>{t('expenses.qaNoKey')}</Text>
+              </View>
+            )}
+
+            {qaError && qaError !== 'NO_API_KEY' && (
+              <View style={qa.infoCard}>
+                <Text style={qa.infoIcon}>⚠️</Text>
+                <Text style={qa.infoText}>{qaError.slice(0, 120)}</Text>
+              </View>
+            )}
+
+            {qaResult && !qaResult.isExpense && (
+              <View style={qa.infoCard}>
+                <Text style={qa.infoIcon}>🚫</Text>
+                <Text style={qa.infoText}>{t('expenses.qaNotExpense')}</Text>
+              </View>
+            )}
+
+            {qaResult?.isExpense && (
+              <View style={qa.confirmCard}>
+                <View style={qa.confirmRow}>
+                  <View style={qa.confirmLeft}>
+                    <Text style={qa.confirmLabel}>{qaResult.label}</Text>
+                    <Text style={qa.confirmCategory}>{qaResult.category}</Text>
+                  </View>
+                  <Text style={qa.confirmAmount}>{fmt(qaResult.amount)}</Text>
+                </View>
+
+                <Text style={qa.methodLabel}>{t('expenses.qaPaymentMethod')}</Text>
+                <View style={qa.methodRow}>
+                  {(['card', 'ewallet', 'cash', 'bank'] as ExpenseMethod[]).map((key) => {
+                    const m = METHODS[key];
+                    const active = qaMethod === key;
+                    return (
+                      <Pressable
+                        key={key}
+                        style={[
+                          qa.methodBtn,
+                          active && { backgroundColor: m.color + '22', borderColor: m.color },
+                        ]}
+                        onPress={() => setQaMethod(key)}>
+                        <Text style={qa.methodIcon}>{m.icon}</Text>
+                        <Text style={[qa.methodBtnLabel, active && { color: m.color, fontFamily: MF.bold }]}>
+                          {m.label}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+
+                <Pressable style={qa.confirmBtn} onPress={handleQuickConfirm}>
+                  <Text style={qa.confirmBtnText}>{t('expenses.qaAddBtn')}</Text>
+                </Pressable>
+              </View>
+            )}
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </View>
   );
 }
@@ -158,6 +341,16 @@ const styles = StyleSheet.create({
   },
   screenTitle: { fontSize: 26, fontFamily: MF.bold, color: MC.ink },
   screenSub: { fontSize: 13, fontFamily: MF.regular, color: MC.muted, marginTop: 2 },
+  headerBtns: { flexDirection: 'row', gap: MS.sm, alignItems: 'center' },
+  quickAddBtn: {
+    paddingHorizontal: MS.md,
+    paddingVertical: MS.sm,
+    borderRadius: 999,
+    backgroundColor: MC.card,
+    borderWidth: 1.5,
+    borderColor: MC.emerald,
+  },
+  quickAddBtnText: { fontSize: 12, fontFamily: MF.semiBold, color: MC.emeraldDark },
   addBtn: {
     width: 40,
     height: 40,
@@ -251,4 +444,131 @@ const styles = StyleSheet.create({
   },
   totalLabel: { fontSize: 14, fontFamily: MF.medium, color: MC.muted },
   totalAmt: { fontSize: 20, fontFamily: MF.bold, color: MC.ink },
+});
+
+const qa = StyleSheet.create({
+  overlay: { flex: 1, justifyContent: 'flex-end' },
+  backdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.4)' },
+  sheet: {
+    backgroundColor: MC.bg,
+    borderTopLeftRadius: MR.xxl,
+    borderTopRightRadius: MR.xxl,
+    paddingHorizontal: MS.lg,
+    paddingTop: MS.md,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 16,
+    elevation: 12,
+  },
+  handle: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: MC.line,
+    alignSelf: 'center',
+    marginBottom: MS.md,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    marginBottom: MS.lg,
+  },
+  title: { fontSize: 18, fontFamily: MF.bold, color: MC.ink },
+  subtitle: { fontSize: 12, fontFamily: MF.regular, color: MC.muted, marginTop: 2 },
+  closeBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: MC.card,
+    borderWidth: 1,
+    borderColor: MC.line,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  closeGlyph: { fontSize: 13, color: MC.muted, fontFamily: MF.medium },
+  input: {
+    backgroundColor: MC.card,
+    borderWidth: 1,
+    borderColor: MC.line,
+    borderRadius: MR.lg,
+    paddingHorizontal: MS.md,
+    paddingVertical: MS.md,
+    fontSize: 14,
+    fontFamily: MF.regular,
+    color: MC.ink,
+    minHeight: 72,
+    textAlignVertical: 'top',
+    marginBottom: MS.md,
+  },
+  parseBtn: {
+    paddingVertical: 13,
+    borderRadius: MR.lg,
+    backgroundColor: MC.emerald,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: MS.md,
+  },
+  parseBtnDisabled: { opacity: 0.4 },
+  parseBtnText: { fontSize: 14, fontFamily: MF.bold, color: '#fff' },
+  infoCard: {
+    flexDirection: 'row',
+    gap: MS.sm,
+    backgroundColor: MC.card,
+    borderWidth: 1,
+    borderColor: MC.line,
+    borderRadius: MR.lg,
+    padding: MS.md,
+    marginBottom: MS.md,
+    alignItems: 'flex-start',
+  },
+  infoIcon: { fontSize: 18 },
+  infoText: { flex: 1, fontSize: 13, fontFamily: MF.regular, color: MC.muted, lineHeight: 19 },
+  confirmCard: {
+    backgroundColor: MC.card,
+    borderWidth: 1,
+    borderColor: MC.line,
+    borderRadius: MR.xl,
+    padding: MS.lg,
+    gap: MS.md,
+    marginBottom: MS.sm,
+  },
+  confirmRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+  },
+  confirmLeft: { flex: 1, marginRight: MS.md },
+  confirmLabel: { fontSize: 16, fontFamily: MF.bold, color: MC.ink },
+  confirmCategory: { fontSize: 12, fontFamily: MF.regular, color: MC.muted, marginTop: 2 },
+  confirmAmount: { fontSize: 22, fontFamily: MF.bold, color: MC.emeraldDark },
+  methodLabel: {
+    fontSize: 11,
+    fontFamily: MF.semiBold,
+    color: MC.muted,
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+  },
+  methodRow: { flexDirection: 'row', gap: MS.sm },
+  methodBtn: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: MS.sm,
+    borderRadius: MR.md,
+    borderWidth: 1.5,
+    borderColor: MC.line,
+    backgroundColor: MC.bg,
+    gap: 3,
+  },
+  methodIcon: { fontSize: 16 },
+  methodBtnLabel: { fontSize: 9, fontFamily: MF.medium, color: MC.muted },
+  confirmBtn: {
+    paddingVertical: 13,
+    borderRadius: MR.lg,
+    backgroundColor: MC.emerald,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  confirmBtnText: { fontSize: 14, fontFamily: MF.bold, color: '#fff' },
 });

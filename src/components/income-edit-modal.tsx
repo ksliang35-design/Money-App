@@ -13,6 +13,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { MC, MF, MR, MS } from '@/constants/money-theme';
 import { type Income } from '@/constants/mock-data';
+import { useT } from '@/i18n';
 import { useAppData } from '@/store/AppDataProvider';
 
 type IncomeType = 'salary' | 'side';
@@ -22,9 +23,9 @@ export type IncomeModalMode =
   | { type: 'add' }
   | null;
 
-const TYPE_META: Record<IncomeType, { label: string; color: string; textColor: string }> = {
-  salary: { label: 'Salary',     color: MC.emerald,   textColor: MC.emeraldDark },
-  side:   { label: 'Side hustle', color: MC.gold,     textColor: '#8A6D1E'      },
+const TYPE_COLORS: Record<IncomeType, { color: string; textColor: string }> = {
+  salary: { color: MC.emerald, textColor: MC.emeraldDark },
+  side:   { color: MC.gold,   textColor: '#8A6D1E'      },
 };
 
 interface Props {
@@ -35,6 +36,12 @@ interface Props {
 export function IncomeEditModal({ mode, onClose }: Props) {
   const insets = useSafeAreaInsets();
   const { addIncome, updateIncome, deleteIncome } = useAppData();
+  const t = useT();
+
+  const TYPE_META: Record<IncomeType, { label: string; color: string; textColor: string }> = {
+    salary: { label: t('incomeModal.typeSalary'), ...TYPE_COLORS.salary },
+    side:   { label: t('incomeModal.typeSide'),   ...TYPE_COLORS.side   },
+  };
 
   const [label, setLabel] = useState('');
   const [amount, setAmount] = useState('');
@@ -88,24 +95,24 @@ export function IncomeEditModal({ mode, onClose }: Props) {
           <View style={styles.handle} />
 
           <View style={styles.header}>
-            <Text style={styles.title}>{isEdit ? 'Edit income' : 'Add income'}</Text>
+            <Text style={styles.title}>{isEdit ? t('incomeModal.editTitle') : t('incomeModal.addTitle')}</Text>
             <Pressable onPress={onClose} style={styles.closeBtn} hitSlop={12}>
               <Text style={styles.closeGlyph}>✕</Text>
             </Pressable>
           </View>
 
-          <Text style={styles.fieldLabel}>Source</Text>
+          <Text style={styles.fieldLabel}>{t('incomeModal.source')}</Text>
           <TextInput
             style={styles.input}
             value={label}
             onChangeText={setLabel}
-            placeholder="e.g. Freelance"
+            placeholder={t('incomeModal.placeholder')}
             placeholderTextColor={MC.muted}
             returnKeyType="next"
             autoFocus
           />
 
-          <Text style={styles.fieldLabel}>Amount per month (RM)</Text>
+          <Text style={styles.fieldLabel}>{t('incomeModal.amount')}</Text>
           <TextInput
             style={styles.input}
             value={amount}
@@ -117,7 +124,7 @@ export function IncomeEditModal({ mode, onClose }: Props) {
             onSubmitEditing={handleSave}
           />
 
-          <Text style={styles.fieldLabel}>Type</Text>
+          <Text style={styles.fieldLabel}>{t('incomeModal.type')}</Text>
           <View style={styles.typeRow}>
             {(Object.entries(TYPE_META) as [IncomeType, (typeof TYPE_META)[IncomeType]][]).map(
               ([key, m]) => {
@@ -146,14 +153,14 @@ export function IncomeEditModal({ mode, onClose }: Props) {
           <View style={styles.actions}>
             {isEdit && (
               <Pressable style={styles.deleteBtn} onPress={handleDelete}>
-                <Text style={styles.deleteTxt}>Delete</Text>
+                <Text style={styles.deleteTxt}>{t('incomeModal.delete')}</Text>
               </Pressable>
             )}
             <Pressable
               style={[styles.saveBtn, !isValid && styles.saveBtnDisabled]}
               onPress={handleSave}
               disabled={!isValid}>
-              <Text style={styles.saveTxt}>{isEdit ? 'Save changes' : 'Add income'}</Text>
+              <Text style={styles.saveTxt}>{isEdit ? t('incomeModal.save') : t('incomeModal.add')}</Text>
             </Pressable>
           </View>
         </View>

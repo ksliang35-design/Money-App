@@ -14,18 +14,12 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { MC, MF, MR, MS, fmt } from '@/constants/money-theme';
+import { useT } from '@/i18n';
 import { getAIReply } from '@/lib/coach';
 import { useAppData } from '@/store/AppDataProvider';
 
 type Message = { role: 'ai' | 'user'; text: string; action?: PendingAction };
 type PendingAction = { label: string; description: string };
-
-const QUICK_ACTIONS = [
-  { icon: '🔍', label: 'Weekly check', q: 'Give me a quick weekly financial check.' },
-  { icon: '❤️', label: 'Health check', q: 'Am I financially healthy right now?' },
-  { icon: '💡', label: 'Save more', q: 'Suggest 3 ways I could save more this month.' },
-  { icon: '🎯', label: 'Goal plan', q: 'How can I reach my emergency fund goal faster?' },
-];
 
 interface Props {
   visible: boolean;
@@ -36,12 +30,17 @@ export function MoneyAIOverlay({ visible, onClose }: Props) {
   const insets = useSafeAreaInsets();
   const scrollRef = useRef<ScrollView>(null);
   const { data } = useAppData();
+  const t = useT();
 
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      role: 'ai',
-      text: `Hi ${data.name}! I can see your finances. Ask me anything or tap a quick action below.`,
-    },
+  const QUICK_ACTIONS = [
+    { icon: '🔍', label: t('ai.weeklyCheck'), q: 'Give me a quick weekly financial check.' },
+    { icon: '❤️', label: t('ai.healthCheck'), q: 'Am I financially healthy right now?' },
+    { icon: '💡', label: t('ai.saveMore'),    q: 'Suggest 3 ways I could save more this month.' },
+    { icon: '🎯', label: t('ai.goalPlan'),    q: 'How can I reach my emergency fund goal faster?' },
+  ];
+
+  const [messages, setMessages] = useState<Message[]>(() => [
+    { role: 'ai', text: t('ai.greeting', { name: data.name }) },
   ]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
@@ -96,8 +95,8 @@ export function MoneyAIOverlay({ visible, onClose }: Props) {
         {
           role: 'ai',
           text: isNoKey
-            ? '🔑 API key not set. Add EXPO_PUBLIC_GEMINI_API_KEY to your .env file and restart the server.'
-            : `Sorry, I couldn't get a response right now. ${e?.message?.slice(0, 80) ?? 'Please try again.'}`,
+            ? t('ai.noKey')
+            : `${t('ai.errorPrefix')}${e?.message?.slice(0, 80) ?? ''}`,
         },
       ]);
     } finally {
@@ -114,8 +113,8 @@ export function MoneyAIOverlay({ visible, onClose }: Props) {
           <View style={styles.headerLeft}>
             <Text style={styles.horse}>♞</Text>
             <View>
-              <Text style={styles.headerTitle}>Money AI</Text>
-              <Text style={styles.headerSub}>Powered by Gemini · not financial advice</Text>
+              <Text style={styles.headerTitle}>{t('ai.title')}</Text>
+              <Text style={styles.headerSub}>{t('ai.sub')}</Text>
             </View>
           </View>
           <Pressable onPress={onClose} style={styles.closeBtn}>
@@ -170,7 +169,7 @@ export function MoneyAIOverlay({ visible, onClose }: Props) {
           <View style={[styles.inputRow, { paddingBottom: insets.bottom || 12 }]}>
             <TextInput
               style={styles.input}
-              placeholder="Ask about your finances…"
+              placeholder={t('ai.placeholder')}
               placeholderTextColor={MC.muted}
               value={input}
               onChangeText={setInput}
@@ -196,7 +195,7 @@ export function MoneyAIOverlay({ visible, onClose }: Props) {
               <Text style={styles.confirmDesc}>{confirm.description}</Text>
               <View style={styles.confirmBtns}>
                 <Pressable style={styles.confirmNot} onPress={() => setConfirm(null)}>
-                  <Text style={styles.confirmNotText}>Not now</Text>
+                  <Text style={styles.confirmNotText}>{t('common.notNow')}</Text>
                 </Pressable>
                 <Pressable
                   style={styles.confirmOk}
@@ -210,7 +209,7 @@ export function MoneyAIOverlay({ visible, onClose }: Props) {
                     ]);
                     setConfirm(null);
                   }}>
-                  <Text style={styles.confirmOkText}>Confirm</Text>
+                  <Text style={styles.confirmOkText}>{t('common.confirm')}</Text>
                 </Pressable>
               </View>
             </View>
