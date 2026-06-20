@@ -1,4 +1,3 @@
-import { LinearGradient } from 'expo-linear-gradient';
 import { useState } from 'react';
 import {
   ActivityIndicator,
@@ -28,13 +27,6 @@ const ALL_CATEGORIES: ExpenseCategory[] = [
   'food', 'transport', 'shopping', 'bills',
   'entertainment', 'health', 'education', 'other',
 ];
-
-const METHOD_ICONS: Record<string, { icon: string; color: string }> = {
-  card: { icon: '💳', color: MC.clay },
-  ewallet: { icon: '📱', color: MC.indigo },
-  cash: { icon: '💵', color: MC.emerald },
-  bank: { icon: '🏦', color: MC.gold },
-};
 
 export default function ExpensesScreen() {
   const insets = useSafeAreaInsets();
@@ -87,9 +79,6 @@ export default function ExpensesScreen() {
       ? data.expenses
       : data.expenses.filter((e) => e.method === filter);
 
-  const cardTotal = data.byMethod.card;
-  const cardPct = Math.round((cardTotal / data.expense) * 100);
-
   function handleQuickClose() {
     setQuickOpen(false);
     setQaText('');
@@ -133,7 +122,7 @@ export default function ExpensesScreen() {
         <View style={styles.headerRow}>
           <View>
             <Text style={styles.screenTitle}>{t('expenses.title')}</Text>
-            <Text style={styles.screenSub}>{data.month} · {fmt(data.expense)}</Text>
+            <Text style={styles.screenSub}>{data.month}</Text>
           </View>
           <View style={styles.headerBtns}>
             <Pressable
@@ -149,23 +138,11 @@ export default function ExpensesScreen() {
           </View>
         </View>
 
-        {/* Card spotlight — tappable filter toggle */}
-        <Pressable
-          onPress={() => setFilter((f) => (f === 'card' ? 'all' : 'card'))}
-          style={({ pressed }) => [pressed && styles.cardSpotPressed]}>
-          <LinearGradient
-            colors={[MC.clay, '#9A3F2B']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={[styles.cardSpot, filter === 'card' && styles.cardSpotActive]}>
-            <Text style={styles.spotTop}>{t('expenses.onCard')}</Text>
-            <Text style={styles.spotAmt}>{fmt(cardTotal)}</Text>
-            <Text style={styles.spotSub}>{t('expenses.cardNote', { pct: cardPct })}</Text>
-            <Text style={[styles.spotHint, filter === 'card' && styles.spotHintActive]}>
-              {filter === 'card' ? t('expenses.cardFilterActive') : t('expenses.cardFilterHint')}
-            </Text>
-          </LinearGradient>
-        </Pressable>
+        {/* Overall summary */}
+        <View style={styles.summaryBanner}>
+          <Text style={styles.summaryLabel}>{t('expenses.summaryLabel')}</Text>
+          <Text style={styles.summaryAmt}>{fmt(data.expense)}</Text>
+        </View>
 
         {/* By method grid — each card is a tappable filter toggle */}
         <View style={styles.methGrid}>
@@ -442,30 +419,28 @@ const styles = StyleSheet.create({
   },
   addBtnText: { fontSize: 24, color: '#fff', lineHeight: 28, fontFamily: MF.regular },
 
-  cardSpot: {
-    borderRadius: MR.xxl,
-    padding: MS.xl,
-    gap: MS.sm,
-    shadowColor: MC.clay,
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.35,
-    shadowRadius: 16,
-    elevation: 6,
-    borderWidth: 2,
-    borderColor: 'transparent',
+  summaryBanner: {
+    backgroundColor: MC.card,
+    borderWidth: 1,
+    borderColor: MC.line,
+    borderRadius: MR.xl,
+    paddingHorizontal: MS.lg,
+    paddingVertical: MS.md,
   },
-  cardSpotActive: {
-    borderColor: 'rgba(255,255,255,0.6)',
+  summaryLabel: {
+    fontSize: 11,
+    fontFamily: MF.semiBold,
+    color: MC.muted,
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+    marginBottom: 4,
   },
-  cardSpotPressed: {
-    opacity: 0.82,
-    transform: [{ scale: 0.975 }],
+  summaryAmt: {
+    fontSize: 34,
+    fontFamily: MF.bold,
+    color: MC.ink,
+    lineHeight: 40,
   },
-  spotTop: { fontSize: 12, fontFamily: MF.semiBold, color: 'rgba(255,255,255,0.9)', textTransform: 'uppercase', letterSpacing: 0.6 },
-  spotAmt: { fontSize: 38, fontFamily: MF.bold, color: '#fff', lineHeight: 46 },
-  spotSub: { fontSize: 12, fontFamily: MF.regular, color: 'rgba(255,255,255,0.85)' },
-  spotHint: { fontSize: 11, fontFamily: MF.medium, color: 'rgba(255,255,255,0.5)', marginTop: 2 },
-  spotHintActive: { color: 'rgba(255,255,255,0.9)', fontFamily: MF.semiBold },
 
   methGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: MS.sm },
   methCard: {
