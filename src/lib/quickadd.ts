@@ -1,4 +1,7 @@
 import { type ExpenseCategory } from '@/constants/mock-data';
+import { getLogger } from '@/lib/logger';
+
+const log = getLogger('quickadd');
 
 export interface ParsedExpense {
   isExpense: boolean;
@@ -9,8 +12,9 @@ export interface ParsedExpense {
 }
 
 export async function parseExpense(text: string): Promise<ParsedExpense> {
+  log.info('parseExpense', text.slice(0, 60));
   const apiKey = process.env.EXPO_PUBLIC_GEMINI_API_KEY;
-  if (!apiKey) throw new Error('NO_API_KEY');
+  if (!apiKey) { log.error('EXPO_PUBLIC_GEMINI_API_KEY not set'); throw new Error('NO_API_KEY'); }
 
   const prompt = `You extract ONE expense from the user's text for a Malaysian finance app (RM). Return ONLY valid JSON:
 {"isExpense":true,"label":"<short name>","amount":<number>,"method":"card|ewallet|cash|bank","category":"food|transport|shopping|bills|entertainment|health|education|other"}
@@ -29,7 +33,9 @@ User text: ${text}`;
 
   if (!res.ok) {
     const body = await res.text().catch(() => '');
-    throw new Error(`Gemini error ${res.status}${body ? `: ${body.slice(0, 120)}` : ''}`);
+    const msg = `Gemini error ${res.status}${body ? `: ${body.slice(0, 120)}` : ''}`;
+    log.error('parseExpense API failed', msg);
+    throw new Error(msg);
   }
 
   const json = await res.json();
@@ -38,6 +44,11 @@ User text: ${text}`;
   const responseText: string = (parts.find((p) => !p.thought) ?? parts[0])?.text ?? '';
   const start = responseText.indexOf('{');
   const end = responseText.lastIndexOf('}');
-  if (start === -1 || end <= start) throw new Error('No JSON found in response');
-  return JSON.parse(responseText.slice(start, end + 1)) as ParsedExpense;
+  if (start === -1 || end <= start) {
+    log.error('parseExpense: no JSON in response', responseText.slice(0, 100));
+    throw new Error('No JSON found in response');
+  }
+  const parsed = JSON.parse(responseText.slice(start, end + 1)) as ParsedExpense;
+  log.info('parseExpense success', `isExpense=${parsed.isExpense} label=${parsed.label} amount=${parsed.amount}`);
+  return parsed;
 }

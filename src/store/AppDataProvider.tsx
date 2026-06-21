@@ -5,6 +5,9 @@ import type { ReactNode } from 'react';
 import { MOCK, type Expense, type ExpenseCategory, type Goal, type Holding, type Income, type HistoryEntry, type Note } from '@/constants/mock-data';
 import type { CoachProfile, CoachPlan } from '@/lib/coach';
 import type { Language } from '@/i18n';
+import { getLogger } from '@/lib/logger';
+
+const log = getLogger('AppDataProvider');
 
 const STORAGE_KEY = 'money-hub-data';
 
@@ -113,9 +116,12 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       if (json) {
         try {
           setRaw({ ...defaultRaw, ...JSON.parse(json) });
+          log.info('data loaded from storage');
         } catch (e) {
-          console.error('[AppDataProvider] Failed to parse stored data:', e);
+          log.error('failed to parse stored data', e);
         }
+      } else {
+        log.info('no stored data found, using defaults');
       }
       setLoaded(true);
     });
@@ -124,84 +130,94 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!loaded) return;
     AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(raw));
+    log.debug('data persisted to storage');
   }, [raw, loaded]);
 
   // Stable mutation object — setRaw from useState is always the same reference,
   // so these functions never need to be recreated across renders.
   const ops = useMemo(() => ({
-    updateExpense: (id: string, updates: Partial<Omit<Expense, 'id'>>) =>
-      setRaw((r) => ({
-        ...r,
-        expenses: r.expenses.map((e) => (e.id === id ? { ...e, ...updates } : e)),
-      })),
-    addExpense: (expense: Omit<Expense, 'id'>) =>
-      setRaw((r) => ({
-        ...r,
-        expenses: [...r.expenses, { ...expense, id: nextId('e') }],
-      })),
-    deleteExpense: (id: string) =>
-      setRaw((r) => ({ ...r, expenses: r.expenses.filter((e) => e.id !== id) })),
+    updateExpense: (id: string, updates: Partial<Omit<Expense, 'id'>>) => {
+      log.debug('updateExpense', id);
+      setRaw((r) => ({ ...r, expenses: r.expenses.map((e) => (e.id === id ? { ...e, ...updates } : e)) }));
+    },
+    addExpense: (expense: Omit<Expense, 'id'>) => {
+      log.debug('addExpense', expense.label);
+      setRaw((r) => ({ ...r, expenses: [...r.expenses, { ...expense, id: nextId('e') }] }));
+    },
+    deleteExpense: (id: string) => {
+      log.debug('deleteExpense', id);
+      setRaw((r) => ({ ...r, expenses: r.expenses.filter((e) => e.id !== id) }));
+    },
 
-    updateIncome: (id: string, updates: Partial<Omit<Income, 'id'>>) =>
-      setRaw((r) => ({
-        ...r,
-        incomes: r.incomes.map((i) => (i.id === id ? { ...i, ...updates } : i)),
-      })),
-    addIncome: (income: Omit<Income, 'id'>) =>
-      setRaw((r) => ({
-        ...r,
-        incomes: [...r.incomes, { ...income, id: nextId('i') }],
-      })),
-    deleteIncome: (id: string) =>
-      setRaw((r) => ({ ...r, incomes: r.incomes.filter((i) => i.id !== id) })),
+    updateIncome: (id: string, updates: Partial<Omit<Income, 'id'>>) => {
+      log.debug('updateIncome', id);
+      setRaw((r) => ({ ...r, incomes: r.incomes.map((i) => (i.id === id ? { ...i, ...updates } : i)) }));
+    },
+    addIncome: (income: Omit<Income, 'id'>) => {
+      log.debug('addIncome', income.label);
+      setRaw((r) => ({ ...r, incomes: [...r.incomes, { ...income, id: nextId('i') }] }));
+    },
+    deleteIncome: (id: string) => {
+      log.debug('deleteIncome', id);
+      setRaw((r) => ({ ...r, incomes: r.incomes.filter((i) => i.id !== id) }));
+    },
 
-    updateGoal: (id: string, updates: Partial<Omit<Goal, 'id'>>) =>
-      setRaw((r) => ({
-        ...r,
-        goals: r.goals.map((g) => (g.id === id ? { ...g, ...updates } : g)),
-      })),
-    addGoal: (goal: Omit<Goal, 'id'>) =>
-      setRaw((r) => ({
-        ...r,
-        goals: [...r.goals, { ...goal, id: nextId('g') }],
-      })),
-    deleteGoal: (id: string) =>
-      setRaw((r) => ({ ...r, goals: r.goals.filter((g) => g.id !== id) })),
+    updateGoal: (id: string, updates: Partial<Omit<Goal, 'id'>>) => {
+      log.debug('updateGoal', id);
+      setRaw((r) => ({ ...r, goals: r.goals.map((g) => (g.id === id ? { ...g, ...updates } : g)) }));
+    },
+    addGoal: (goal: Omit<Goal, 'id'>) => {
+      log.debug('addGoal', goal.label);
+      setRaw((r) => ({ ...r, goals: [...r.goals, { ...goal, id: nextId('g') }] }));
+    },
+    deleteGoal: (id: string) => {
+      log.debug('deleteGoal', id);
+      setRaw((r) => ({ ...r, goals: r.goals.filter((g) => g.id !== id) }));
+    },
 
-    updateHolding: (id: string, updates: Partial<Omit<Holding, 'id'>>) =>
-      setRaw((r) => ({
-        ...r,
-        holdings: (r.holdings ?? []).map((h) => (h.id === id ? { ...h, ...updates } : h)),
-      })),
-    addHolding: (holding: Omit<Holding, 'id'>) =>
-      setRaw((r) => ({
-        ...r,
-        holdings: [...(r.holdings ?? []), { ...holding, id: nextId('h') }],
-      })),
-    deleteHolding: (id: string) =>
-      setRaw((r) => ({ ...r, holdings: (r.holdings ?? []).filter((h) => h.id !== id) })),
+    updateHolding: (id: string, updates: Partial<Omit<Holding, 'id'>>) => {
+      log.debug('updateHolding', id);
+      setRaw((r) => ({ ...r, holdings: (r.holdings ?? []).map((h) => (h.id === id ? { ...h, ...updates } : h)) }));
+    },
+    addHolding: (holding: Omit<Holding, 'id'>) => {
+      log.debug('addHolding', holding.ticker);
+      setRaw((r) => ({ ...r, holdings: [...(r.holdings ?? []), { ...holding, id: nextId('h') }] }));
+    },
+    deleteHolding: (id: string) => {
+      log.debug('deleteHolding', id);
+      setRaw((r) => ({ ...r, holdings: (r.holdings ?? []).filter((h) => h.id !== id) }));
+    },
 
-    updateNote: (id: string, updates: Partial<Omit<Note, 'id'>>) =>
-      setRaw((r) => ({
-        ...r,
-        notes: (r.notes ?? []).map((n) => (n.id === id ? { ...n, ...updates } : n)),
-      })),
-    addNote: (note: Omit<Note, 'id'>) =>
-      setRaw((r) => ({
-        ...r,
-        notes: [{ ...note, id: nextId('no') }, ...(r.notes ?? [])],
-      })),
-    deleteNote: (id: string) =>
-      setRaw((r) => ({ ...r, notes: (r.notes ?? []).filter((n) => n.id !== id) })),
+    updateNote: (id: string, updates: Partial<Omit<Note, 'id'>>) => {
+      log.debug('updateNote', id);
+      setRaw((r) => ({ ...r, notes: (r.notes ?? []).map((n) => (n.id === id ? { ...n, ...updates } : n)) }));
+    },
+    addNote: (note: Omit<Note, 'id'>) => {
+      log.debug('addNote');
+      setRaw((r) => ({ ...r, notes: [{ ...note, id: nextId('no') }, ...(r.notes ?? [])] }));
+    },
+    deleteNote: (id: string) => {
+      log.debug('deleteNote', id);
+      setRaw((r) => ({ ...r, notes: (r.notes ?? []).filter((n) => n.id !== id) }));
+    },
 
-    resetData: () => setRaw(defaultRaw),
+    resetData: () => {
+      log.info('data reset to defaults');
+      setRaw(defaultRaw);
+    },
 
-    saveCoachResult: (profile: CoachProfile, plan: CoachPlan) =>
-      setRaw((r) => ({ ...r, coachProfile: profile, coachPlan: plan })),
-    clearCoachResult: () =>
-      setRaw((r) => ({ ...r, coachProfile: null, coachPlan: null })),
-    setLanguage: (lang: Language) =>
-      setRaw((r) => ({ ...r, language: lang })),
+    saveCoachResult: (profile: CoachProfile, plan: CoachPlan) => {
+      log.info('coach result saved', plan.model);
+      setRaw((r) => ({ ...r, coachProfile: profile, coachPlan: plan }));
+    },
+    clearCoachResult: () => {
+      log.info('coach result cleared');
+      setRaw((r) => ({ ...r, coachProfile: null, coachPlan: null }));
+    },
+    setLanguage: (lang: Language) => {
+      log.info('language set', lang);
+      setRaw((r) => ({ ...r, language: lang }));
+    },
   }), []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Re-derive only when raw data or load state actually changes.

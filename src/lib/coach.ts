@@ -39,6 +39,10 @@ export interface ModelOptions {
   options: ModelOption[];
 }
 
+import { getLogger } from '@/lib/logger';
+
+const log = getLogger('coach');
+
 const LANG_NAMES: Record<string, string> = {
   en: 'English',
   ms: 'Malay (Bahasa Malaysia)',
@@ -108,8 +112,9 @@ export async function getCoachPlan(
   financials: CoachFinancials,
   chosenModel?: string,
 ): Promise<CoachPlan> {
+  log.info('getCoachPlan start', chosenModel ?? 'auto-select');
   const apiKey = process.env.EXPO_PUBLIC_GEMINI_API_KEY;
-  if (!apiKey) throw new Error('NO_API_KEY');
+  if (!apiKey) { log.error('EXPO_PUBLIC_GEMINI_API_KEY not set'); throw new Error('NO_API_KEY'); }
 
   const categoryLine = financials.byCategory
     ? `\n- Spending by category: ${formatCategory(financials.byCategory)}`
@@ -148,7 +153,9 @@ ${instruction}`;
 
   if (!res.ok) {
     const body = await res.text().catch(() => '');
-    throw new Error(`Gemini error ${res.status}${body ? `: ${body.slice(0, 200)}` : ''}`);
+    const msg = `Gemini error ${res.status}${body ? `: ${body.slice(0, 200)}` : ''}`;
+    log.error('getCoachPlan failed', msg);
+    throw new Error(msg);
   }
 
   const json = await res.json();
@@ -158,9 +165,14 @@ ${instruction}`;
 
   const start = text.indexOf('{');
   const end = text.lastIndexOf('}');
-  if (start === -1 || end <= start) throw new Error('No JSON found in Gemini response');
+  if (start === -1 || end <= start) {
+    log.error('getCoachPlan: no JSON in response', text.slice(0, 100));
+    throw new Error('No JSON found in Gemini response');
+  }
 
-  return JSON.parse(text.slice(start, end + 1)) as CoachPlan;
+  const plan = JSON.parse(text.slice(start, end + 1)) as CoachPlan;
+  log.info('getCoachPlan success', plan.model);
+  return plan;
 }
 
 // ── Money AI chat ─────────────────────────────────────────────────────────────
@@ -177,8 +189,9 @@ export async function getAIReply(
   goalsText: string,
   history: Array<{ role: 'user' | 'ai'; text: string }>,
 ): Promise<AIReply> {
+  log.info('getAIReply start', `history=${history.length} turns`);
   const apiKey = process.env.EXPO_PUBLIC_GEMINI_API_KEY;
-  if (!apiKey) throw new Error('NO_API_KEY');
+  if (!apiKey) { log.error('EXPO_PUBLIC_GEMINI_API_KEY not set'); throw new Error('NO_API_KEY'); }
 
   const categoryLine = financials.byCategory
     ? `\n- Categories: ${formatCategory(financials.byCategory)}`
@@ -224,7 +237,9 @@ Return ONLY valid JSON — no markdown fences, no extra text:
 
   if (!res.ok) {
     const body = await res.text().catch(() => '');
-    throw new Error(`Gemini error ${res.status}${body ? `: ${body.slice(0, 120)}` : ''}`);
+    const msg = `Gemini error ${res.status}${body ? `: ${body.slice(0, 120)}` : ''}`;
+    log.error('getAIReply failed', msg);
+    throw new Error(msg);
   }
 
   const json = await res.json();
@@ -235,8 +250,12 @@ Return ONLY valid JSON — no markdown fences, no extra text:
   const end = text.lastIndexOf('}');
   if (start !== -1 && end > start) {
     try {
-      return JSON.parse(text.slice(start, end + 1)) as AIReply;
-    } catch {}
+      const reply = JSON.parse(text.slice(start, end + 1)) as AIReply;
+      log.info('getAIReply success', reply.action ? `action=${reply.action.label}` : 'no action');
+      return reply;
+    } catch (e) {
+      log.warn('getAIReply JSON parse failed, falling back to plain text', e);
+    }
   }
 
   return { text: text.trim() || 'Sorry, I had trouble with that. Please try again.', action: null };
@@ -288,8 +307,9 @@ export async function getModelOptions(
   financials: CoachFinancials,
   language = 'en',
 ): Promise<ModelOptions> {
+  log.info('getModelOptions start', `lang=${language}`);
   const apiKey = process.env.EXPO_PUBLIC_GEMINI_API_KEY;
-  if (!apiKey) throw new Error('NO_API_KEY');
+  if (!apiKey) { log.error('EXPO_PUBLIC_GEMINI_API_KEY not set'); throw new Error('NO_API_KEY'); }
 
   const langName = LANG_NAMES[language] ?? 'English';
   const categoryLine = financials.byCategory
@@ -318,7 +338,9 @@ User profile:
 
   if (!res.ok) {
     const body = await res.text().catch(() => '');
-    throw new Error(`Gemini error ${res.status}${body ? `: ${body.slice(0, 200)}` : ''}`);
+    const msg = `Gemini error ${res.status}${body ? `: ${body.slice(0, 200)}` : ''}`;
+    log.error('getModelOptions failed', msg);
+    throw new Error(msg);
   }
 
   const json = await res.json();
@@ -327,7 +349,12 @@ User profile:
 
   const start = text.indexOf('{');
   const end = text.lastIndexOf('}');
-  if (start === -1 || end <= start) throw new Error('No JSON found in Gemini response');
+  if (start === -1 || end <= start) {
+    log.error('getModelOptions: no JSON in response', text.slice(0, 100));
+    throw new Error('No JSON found in Gemini response');
+  }
 
-  return JSON.parse(text.slice(start, end + 1)) as ModelOptions;
+  const options = JSON.parse(text.slice(start, end + 1)) as ModelOptions;
+  log.info('getModelOptions success', `recommended=${options.recommended}, count=${options.options.length}`);
+  return options;
 }
