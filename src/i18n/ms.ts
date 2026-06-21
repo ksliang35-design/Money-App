@@ -1,6 +1,6 @@
-import type { en } from './en';
+import type { TranslationShape } from './en';
 
-export const ms: typeof en = {
+export const ms: TranslationShape = {
   tabs: {
     home: 'Utama',
     expenses: 'Perbelanjaan',

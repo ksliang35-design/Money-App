@@ -1,12 +1,13 @@
 import { useAppData } from '@/store/AppDataProvider';
 import { en } from './en';
+import type { TranslationShape } from './en';
 import { ms } from './ms';
 import { zh } from './zh';
 
 export type Language = 'en' | 'ms' | 'zh';
 export type Translations = typeof en;
 
-const LANGS: Record<Language, Translations> = { en, ms, zh };
+const LANGS: Record<Language, TranslationShape> = { en, ms, zh };
 
 function getNestedValue(obj: any, keys: string[]): string | undefined {
   let cur = obj;
@@ -20,7 +21,7 @@ function getNestedValue(obj: any, keys: string[]): string | undefined {
 export function useT() {
   const { data } = useAppData();
   const lang = ((data as any).language as Language) ?? 'en';
-  const dict: Translations = LANGS[lang] ?? LANGS.en;
+  const dict = LANGS[lang] ?? LANGS.en;
 
   function t(key: string, vars?: Record<string, string | number>): string {
     const keys = key.split('.');

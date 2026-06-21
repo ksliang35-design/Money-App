@@ -206,7 +206,6 @@ export default function DashboardScreen() {
       <MoneyAIOverlay visible={aiOpen} onClose={() => setAiOpen(false)} />
       {langOpen && (
         <LanguagePicker
-          current={(data.language as Language) ?? 'en'}
           onSelect={(l) => { setLanguage(l); setLangOpen(false); }}
           onClose={() => setLangOpen(false)}
         />

@@ -1,6 +1,6 @@
-import type { en } from './en';
+import type { TranslationShape } from './en';
 
-export const zh: typeof en = {
+export const zh: TranslationShape = {
   tabs: {
     home: '主页',
     expenses: '支出',

@@ -279,3 +279,6 @@ export const en = {
     errorPrefix: 'Sorry, I couldn\'t get a response right now. ',
   },
 } as const;
+
+type DeepString<T> = { [K in keyof T]: T[K] extends string ? string : DeepString<T[K]> };
+export type TranslationShape = DeepString<typeof en>;
