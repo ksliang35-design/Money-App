@@ -25,6 +25,7 @@ export interface CoachPlan {
   buckets: BudgetBucket[];
   nextAction: string;
   encouragement: string;
+  split?: Record<string, number>; // user-adjusted percentages, persisted after editing
 }
 
 export interface ModelOption {

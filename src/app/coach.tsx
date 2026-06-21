@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -40,6 +40,30 @@ const GOAL_OPTIONS = [
   { value: 'Just get organized', labelKey: 'coach.goalGetOrganized', icon: '📋' },
 ];
 
+// Maps Gemini bucket labels → i18n guide keys. Covers all 9 models from the system prompt.
+const BUCKET_GUIDE_KEY: Record<string, string> = {
+  'Needs':                 'coach.guideNeeds',
+  'Wants':                 'coach.guideWants',
+  'Savings':               'coach.guideSavings',
+  'Living':                'coach.guideLiving',
+  'Debt & Giving':         'coach.guideGiving',
+  'Housing':               'coach.guideHousing',
+  'Lifestyle':             'coach.guideLifestyle',
+  'Savings & Investments': 'coach.guideWealthBuilding',
+  'Giving':                'coach.guideGiving',
+  'Debt Repayment':        'coach.guideDebt',
+  'Emergency Buffer':      'coach.guideEmergency',
+  'Necessities':           'coach.guideNecessities',
+  'Long-term Savings':     'coach.guideLongTermSavings',
+  'Education':             'coach.guideEducation',
+  'Play':                  'coach.guidePlay',
+  'Financial Freedom':     'coach.guideFinancialFreedom',
+  'Give':                  'coach.guideGiving',
+  'Save First':            'coach.guideSaveFirst',
+  'Fixed Commitments':     'coach.guideFixedCommitments',
+  'Discretionary':         'coach.guideDiscretionary',
+};
+
 function incomeToBracket(income: number): string {
   const match = INCOME_BRACKETS.find((b) => income >= b.min && income < b.max);
   return match?.label ?? INCOME_BRACKETS[INCOME_BRACKETS.length - 1].label;
@@ -59,7 +83,30 @@ export default function CoachScreen() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // editSplit: bucket label → user-adjusted percentage
+  const [editSplit, setEditSplit] = useState<Record<string, number>>({});
+  const [splitSaved, setSplitSaved] = useState(false);
+
   const suggestedBracket = incomeToBracket(data.income);
+
+  // Derive split from plan buckets whenever plan loads or model changes.
+  // Prefer stored split; fall back to deriving from Gemini's targetRM values.
+  useEffect(() => {
+    if (!plan || plan.buckets.length === 0) return;
+    if (plan.split && Object.keys(plan.split).length > 0) {
+      setEditSplit(plan.split);
+    } else {
+      const bucketTotal = plan.buckets.reduce((s, b) => s + b.targetRM, 0);
+      const denom = bucketTotal > 0 ? bucketTotal : data.income || 1;
+      const derived = Object.fromEntries(
+        plan.buckets.map((b) => [b.label, Math.round((b.targetRM / denom) * 100)]),
+      );
+      setEditSplit(derived);
+    }
+  }, [plan?.model, plan?.buckets.length]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const splitTotal = Object.values(editSplit).reduce((s, v) => s + v, 0);
+  const isSplitValid = splitTotal === 100;
 
   const fetchOptions = async (a: { age: string; incomeBracket: string; goal: string }) => {
     setLoading(true);
@@ -122,13 +169,16 @@ export default function CoachScreen() {
   };
 
   const handleSelectModel = (opt: ModelOption) => {
+    // Store the model's original split so the editor can show percentages before Gemini responds
     const chosen: CoachPlan = {
       model: opt.model,
       why: opt.why,
       buckets: [],
       nextAction: '',
       encouragement: '',
+      split: opt.split,
     };
+    setEditSplit(opt.split);
     setPlan(chosen);
     saveCoachResult(
       { age: answers.age!, incomeBracket: answers.incomeBracket!, goal: answers.goal! },
@@ -136,6 +186,41 @@ export default function CoachScreen() {
     );
     setStep('done');
     fetchPlan(opt.model);
+  };
+
+  const handleSaveSplit = () => {
+    if (!plan || !answers.age || !answers.incomeBracket || !answers.goal) return;
+    const updatedBuckets = plan.buckets.map((b) => ({
+      ...b,
+      targetRM: Math.round(((editSplit[b.label] ?? 0) / 100) * data.income),
+    }));
+    const updatedPlan: CoachPlan = { ...plan, buckets: updatedBuckets, split: editSplit };
+    setPlan(updatedPlan);
+    saveCoachResult(
+      { age: answers.age, incomeBracket: answers.incomeBracket, goal: answers.goal },
+      updatedPlan,
+    );
+    setSplitSaved(true);
+    setTimeout(() => setSplitSaved(false), 2000);
+  };
+
+  const handleNormalize = () => {
+    const labels = Object.keys(editSplit);
+    if (labels.length === 0) return;
+    const total = Object.values(editSplit).reduce((s, v) => s + v, 0);
+    if (total === 0) return;
+    let allocated = 0;
+    const normalized: Record<string, number> = {};
+    labels.forEach((l, i) => {
+      if (i === labels.length - 1) {
+        normalized[l] = 100 - allocated;
+      } else {
+        const v = Math.round((editSplit[l] / total) * 100);
+        normalized[l] = v;
+        allocated += v;
+      }
+    });
+    setEditSplit(normalized);
   };
 
   const handleRetry = () => {
@@ -153,6 +238,8 @@ export default function CoachScreen() {
     setOptions(null);
     setError(null);
     setLoading(false);
+    setEditSplit({});
+    setSplitSaved(false);
     clearCoachResult();
   };
 
@@ -362,7 +449,7 @@ export default function CoachScreen() {
           <>
             {profileRecap}
 
-            {/* Chosen model header — always visible once plan exists */}
+            {/* Chosen model header */}
             {plan && (
               <View style={styles.chosenCard}>
                 <Text style={styles.chosenCheck}>✓</Text>
@@ -402,18 +489,33 @@ export default function CoachScreen() {
               </View>
             )}
 
-            {/* Full breakdown */}
+            {/* ── Editable budget breakdown ── */}
             {!loading && !error && plan && plan.buckets.length > 0 && (
               <>
                 <View style={styles.card}>
-                  <Text style={styles.sectionLabel}>{t('coach.budgetBreakdown')}</Text>
+                  {/* Header row with save button */}
+                  <View style={styles.editHeader}>
+                    <Text style={styles.sectionLabel}>{t('coach.editSplit')}</Text>
+                    <Pressable
+                      onPress={handleSaveSplit}
+                      style={({ pressed }) => [styles.saveBtn, pressed && { opacity: 0.7 }]}>
+                      <Text style={styles.saveBtnTxt}>
+                        {splitSaved ? `✓ ${t('coach.saveSplit')}` : t('coach.saveSplit')}
+                      </Text>
+                    </Pressable>
+                  </View>
+
                   {plan.buckets.map((bucket, i) => {
-                    const pct =
-                      bucket.targetRM > 0
-                        ? Math.min(100, Math.round((bucket.actualRM / bucket.targetRM) * 100))
+                    const pct = editSplit[bucket.label] ?? 0;
+                    const targetRM = Math.round((pct / 100) * data.income);
+                    const fillPct =
+                      targetRM > 0
+                        ? Math.min(100, Math.round((bucket.actualRM / targetRM) * 100))
                         : 0;
-                    const over = bucket.actualRM > bucket.targetRM;
+                    const over = bucket.actualRM > targetRM;
                     const fillColor = over ? MC.clay : MC.emerald;
+                    const guideKey = BUCKET_GUIDE_KEY[bucket.label] ?? 'coach.guideGeneral';
+
                     return (
                       <View
                         key={bucket.label}
@@ -421,20 +523,47 @@ export default function CoachScreen() {
                           styles.bucketRow,
                           i < plan.buckets.length - 1 && styles.bucketRowBorder,
                         ]}>
-                        <View style={styles.bucketHeader}>
-                          <Text style={styles.bucketLabel}>{bucket.label}</Text>
-                          <Text style={[styles.bucketStatus, { color: fillColor }]}>
-                            {over ? t('coach.overBudget') : t('coach.onTrack')}
-                          </Text>
+                        {/* Label + category guide */}
+                        <Text style={styles.bucketLabel}>{bucket.label}</Text>
+                        <Text style={styles.bucketGuide}>{t(guideKey)}</Text>
+
+                        {/* +/- controls + live RM */}
+                        <View style={styles.splitRow}>
+                          <Pressable
+                            onPress={() =>
+                              setEditSplit((s) => ({
+                                ...s,
+                                [bucket.label]: Math.max(0, (s[bucket.label] ?? 0) - 1),
+                              }))
+                            }
+                            style={({ pressed }) => [styles.adjBtn, pressed && { opacity: 0.55 }]}>
+                            <Text style={styles.adjBtnTxt}>−</Text>
+                          </Pressable>
+                          <Text style={styles.pctDisplay}>{pct}%</Text>
+                          <Pressable
+                            onPress={() =>
+                              setEditSplit((s) => ({
+                                ...s,
+                                [bucket.label]: Math.min(100, (s[bucket.label] ?? 0) + 1),
+                              }))
+                            }
+                            style={({ pressed }) => [styles.adjBtn, pressed && { opacity: 0.55 }]}>
+                            <Text style={styles.adjBtnTxt}>+</Text>
+                          </Pressable>
+                          <Text style={styles.rmTarget}>{fmt(targetRM)}</Text>
                         </View>
+
+                        {/* Progress bar — actual vs adjusted target */}
                         <View style={styles.meterBg}>
                           <View
                             style={[
                               styles.meterFill,
-                              { width: `${pct}%` as any, backgroundColor: fillColor },
+                              { width: `${fillPct}%` as any, backgroundColor: fillColor },
                             ]}
                           />
                         </View>
+
+                        {/* Actual vs target numbers */}
                         <View style={styles.bucketNums}>
                           <Text style={styles.bucketNum}>
                             {t('coach.actual')}{' '}
@@ -442,11 +571,33 @@ export default function CoachScreen() {
                               {fmt(bucket.actualRM)}
                             </Text>
                           </Text>
-                          <Text style={styles.bucketNum}>{t('coach.target2')} {fmt(bucket.targetRM)}</Text>
+                          <Text style={[styles.bucketStatus, { color: fillColor }]}>
+                            {over ? t('coach.overBudget') : t('coach.onTrack')}
+                          </Text>
                         </View>
                       </View>
                     );
                   })}
+
+                  {/* Total row */}
+                  <View style={styles.totalRow}>
+                    <Text style={styles.totalLabel}>{t('coach.totalPct')}</Text>
+                    <Text style={[styles.totalPct, !isSplitValid && styles.totalPctWarn]}>
+                      {splitTotal}%{isSplitValid ? ' ✓' : ' ⚠'}
+                    </Text>
+                  </View>
+
+                  {/* Warning + normalize */}
+                  {!isSplitValid && (
+                    <View style={styles.warnRow}>
+                      <Text style={styles.warnText}>{t('coach.warnTotal')}</Text>
+                      <Pressable
+                        onPress={handleNormalize}
+                        style={({ pressed }) => [styles.normalizeBtn, pressed && { opacity: 0.7 }]}>
+                        <Text style={styles.normalizeTxt}>{t('coach.normalize')}</Text>
+                      </Pressable>
+                    </View>
+                  )}
                 </View>
 
                 {!!plan.nextAction && (
@@ -464,7 +615,7 @@ export default function CoachScreen() {
               </>
             )}
 
-            {/* Placeholder: model chosen but breakdown not yet loaded (e.g. app reloaded mid-flow) */}
+            {/* Placeholder: model chosen but breakdown not yet arrived */}
             {!loading && !error && plan && plan.buckets.length === 0 && (
               <View style={styles.placeholderCard}>
                 <Text style={styles.placeholderText}>{t('coach.breakdownSoon')}</Text>
@@ -660,14 +811,8 @@ const styles = StyleSheet.create({
     padding: MS.lg,
     gap: MS.sm,
   },
-  optionCardRec: {
-    borderColor: MC.emerald,
-    borderWidth: 2,
-  },
-  optionCardPressed: {
-    opacity: 0.7,
-    transform: [{ scale: 0.985 }],
-  },
+  optionCardRec: { borderColor: MC.emerald, borderWidth: 2 },
+  optionCardPressed: { opacity: 0.7, transform: [{ scale: 0.985 }] },
   optionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -676,12 +821,7 @@ const styles = StyleSheet.create({
   optionModelName: { fontSize: 22, fontFamily: MF.bold, color: MC.ink },
   optionModelNameRec: { color: MC.emeraldDark },
   optionChevron: { fontSize: 24, color: MC.muted },
-  optionSplit: {
-    fontSize: 12,
-    fontFamily: MF.medium,
-    color: MC.muted,
-    lineHeight: 18,
-  },
+  optionSplit: { fontSize: 12, fontFamily: MF.medium, color: MC.muted, lineHeight: 18 },
   optionDivider: { height: 1, backgroundColor: MC.line, marginVertical: MS.xs },
   optionBestForLabel: {
     fontSize: 10,
@@ -691,12 +831,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.6,
   },
   optionBestFor: { fontSize: 13, fontFamily: MF.semiBold, color: MC.ink },
-  optionWhy: {
-    fontSize: 13,
-    fontFamily: MF.regular,
-    color: MC.muted,
-    lineHeight: 20,
-  },
+  optionWhy: { fontSize: 13, fontFamily: MF.regular, color: MC.muted, lineHeight: 20 },
 
   // Chosen model confirmation
   chosenCard: {
@@ -714,7 +849,7 @@ const styles = StyleSheet.create({
   chosenModel: { fontSize: 22, fontFamily: MF.bold, color: MC.emeraldDark },
   chosenLabel: { fontSize: 12, fontFamily: MF.medium, color: MC.muted, marginTop: 2 },
 
-  // Placeholder (Step 2 not yet done)
+  // Placeholder
   placeholderCard: {
     backgroundColor: MC.card,
     borderWidth: 1,
@@ -724,14 +859,14 @@ const styles = StyleSheet.create({
     gap: MS.sm,
   },
   placeholderText: { fontSize: 14, fontFamily: MF.medium, color: MC.muted },
-  placeholderWhy: {
-    fontSize: 13,
-    fontFamily: MF.regular,
-    color: MC.muted,
-    lineHeight: 20,
-  },
+  placeholderWhy: { fontSize: 13, fontFamily: MF.regular, color: MC.muted, lineHeight: 20 },
 
-  // Bucket breakdown
+  // Editable breakdown
+  editHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
   sectionLabel: {
     fontSize: 10,
     fontFamily: MF.bold,
@@ -739,19 +874,74 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     letterSpacing: 0.6,
   },
-  bucketRow: { gap: MS.sm, paddingVertical: MS.md },
+  saveBtn: {
+    backgroundColor: MC.emerald,
+    borderRadius: 999,
+    paddingHorizontal: MS.md,
+    paddingVertical: 6,
+  },
+  saveBtnTxt: { fontSize: 12, fontFamily: MF.semiBold, color: '#fff' },
+
+  bucketRow: { gap: 6, paddingVertical: MS.md },
   bucketRowBorder: { borderBottomWidth: 1, borderBottomColor: MC.line },
-  bucketHeader: {
+  bucketLabel: { fontSize: 14, fontFamily: MF.semiBold, color: MC.ink },
+  bucketGuide: { fontSize: 11, fontFamily: MF.regular, color: MC.muted, lineHeight: 16 },
+
+  splitRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: MS.sm,
+    marginTop: 2,
+  },
+  adjBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: MC.line,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  adjBtnTxt: { fontSize: 18, fontFamily: MF.bold, color: MC.ink, lineHeight: 22 },
+  pctDisplay: {
+    fontSize: 16,
+    fontFamily: MF.bold,
+    color: MC.ink,
+    minWidth: 44,
+    textAlign: 'center',
+  },
+  rmTarget: { fontSize: 13, fontFamily: MF.semiBold, color: MC.emeraldDark, marginLeft: MS.xs },
+
+  meterBg: { height: 10, backgroundColor: MC.line, borderRadius: 6, overflow: 'hidden' },
+  meterFill: { height: '100%', borderRadius: 6 },
+
+  bucketNums: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  bucketNum: { fontSize: 12, fontFamily: MF.regular, color: MC.muted },
+  bucketStatus: { fontSize: 11, fontFamily: MF.medium },
+
+  totalRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    paddingTop: MS.sm,
+    borderTopWidth: 1,
+    borderTopColor: MC.line,
+    marginTop: MS.xs,
   },
-  bucketLabel: { fontSize: 14, fontFamily: MF.semiBold, color: MC.ink },
-  bucketStatus: { fontSize: 11, fontFamily: MF.medium },
-  meterBg: { height: 10, backgroundColor: MC.line, borderRadius: 6, overflow: 'hidden' },
-  meterFill: { height: '100%', borderRadius: 6 },
-  bucketNums: { flexDirection: 'row', justifyContent: 'space-between' },
-  bucketNum: { fontSize: 12, fontFamily: MF.regular, color: MC.muted },
+  totalLabel: { fontSize: 12, fontFamily: MF.semiBold, color: MC.muted },
+  totalPct: { fontSize: 15, fontFamily: MF.bold, color: MC.emeraldDark },
+  totalPctWarn: { color: MC.clay },
+
+  warnRow: { gap: MS.sm },
+  warnText: { fontSize: 12, fontFamily: MF.regular, color: MC.clay },
+  normalizeBtn: {
+    alignSelf: 'flex-start',
+    borderWidth: 1,
+    borderColor: MC.clay,
+    borderRadius: 999,
+    paddingHorizontal: MS.md,
+    paddingVertical: 6,
+  },
+  normalizeTxt: { fontSize: 12, fontFamily: MF.semiBold, color: MC.clay },
 
   // Next action
   actionCard: { backgroundColor: MC.goldLight, borderColor: MC.goldBorder, gap: MS.sm },
