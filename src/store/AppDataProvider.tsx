@@ -15,7 +15,7 @@ const STORAGE_KEY = 'money-hub-data';
 // Moved outside component — pure function, no closure over state needed
 const nextId = (prefix: string) => `${prefix}${Date.now()}`;
 
-interface RawData {
+export interface RawData {
   name: string;
   month: string;
   incomes: Income[];
@@ -61,6 +61,7 @@ interface AppDataContextValue {
   updateNote: (id: string, updates: Partial<Omit<Note, 'id'>>) => void;
   addNote: (note: Omit<Note, 'id'>) => void;
   deleteNote: (id: string) => void;
+  importData: (incoming: Partial<RawData>) => void;
   resetData: () => void;
   saveCoachResult: (profile: CoachProfile, plan: CoachPlan) => void;
   clearCoachResult: () => void;
@@ -205,6 +206,10 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       setRaw((r) => ({ ...r, notes: (r.notes ?? []).filter((n) => n.id !== id) }));
     },
 
+    importData: (incoming: Partial<RawData>) => {
+      log.info('data imported from backup');
+      setRaw({ ...defaultRaw, ...incoming });
+    },
     resetData: () => {
       log.info('data reset to defaults');
       setRaw(defaultRaw);

@@ -1,5 +1,6 @@
 import { type ExpenseCategory } from '@/constants/mock-data';
 import { getLogger } from '@/lib/logger';
+import { callGemini, extractJSON } from '@/lib/gemini';
 
 const log = getLogger('quickadd');
 
@@ -13,8 +14,6 @@ export interface ParsedExpense {
 
 export async function parseExpense(text: string): Promise<ParsedExpense> {
   log.info('parseExpense', text.slice(0, 60));
-  const apiKey = process.env.EXPO_PUBLIC_GEMINI_API_KEY;
-  if (!apiKey) { log.error('EXPO_PUBLIC_GEMINI_API_KEY not set'); throw new Error('NO_API_KEY'); }
 
   const prompt = `You extract ONE expense from the user's text for a Malaysian finance app (RM). Return ONLY valid JSON:
 {"isExpense":true,"label":"<short name>","amount":<number>,"method":"card|ewallet|cash|bank","category":"food|transport|shopping|bills|entertainment|health|education|other"}
@@ -22,33 +21,13 @@ Pick the best-matching category. If it's an OTP, promo, verification code, or no
 
 User text: ${text}`;
 
-  const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
-    {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }),
-    },
-  );
-
-  if (!res.ok) {
-    const body = await res.text().catch(() => '');
-    const msg = `Gemini error ${res.status}${body ? `: ${body.slice(0, 120)}` : ''}`;
-    log.error('parseExpense API failed', msg);
-    throw new Error(msg);
-  }
-
-  const json = await res.json();
-  // Gemini 2.5 Flash returns thinking in parts[0] (thought:true) and content in parts[1]
-  const parts: Array<{ text?: string; thought?: boolean }> = json.candidates?.[0]?.content?.parts ?? [];
-  const responseText: string = (parts.find((p) => !p.thought) ?? parts[0])?.text ?? '';
-  const start = responseText.indexOf('{');
-  const end = responseText.lastIndexOf('}');
-  if (start === -1 || end <= start) {
+  const responseText = await callGemini({ contents: [{ parts: [{ text: prompt }] }] });
+  try {
+    const parsed = JSON.parse(extractJSON(responseText)) as ParsedExpense;
+    log.info('parseExpense success', `isExpense=${parsed.isExpense} label=${parsed.label} amount=${parsed.amount}`);
+    return parsed;
+  } catch {
     log.error('parseExpense: no JSON in response', responseText.slice(0, 100));
     throw new Error('No JSON found in response');
   }
-  const parsed = JSON.parse(responseText.slice(start, end + 1)) as ParsedExpense;
-  log.info('parseExpense success', `isExpense=${parsed.isExpense} label=${parsed.label} amount=${parsed.amount}`);
-  return parsed;
 }

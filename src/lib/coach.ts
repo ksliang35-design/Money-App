@@ -41,6 +41,7 @@ export interface ModelOptions {
 }
 
 import { getLogger } from '@/lib/logger';
+import { callGemini, extractJSON } from '@/lib/gemini';
 
 const log = getLogger('coach');
 
@@ -114,8 +115,6 @@ export async function getCoachPlan(
   chosenModel?: string,
 ): Promise<CoachPlan> {
   log.info('getCoachPlan start', chosenModel ?? 'auto-select');
-  const apiKey = process.env.EXPO_PUBLIC_GEMINI_API_KEY;
-  if (!apiKey) { log.error('EXPO_PUBLIC_GEMINI_API_KEY not set'); throw new Error('NO_API_KEY'); }
 
   const categoryLine = financials.byCategory
     ? `\n- Spending by category: ${formatCategory(financials.byCategory)}`
@@ -141,39 +140,15 @@ This month's numbers:
 
 ${instruction}`;
 
-  const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
-    {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: fullPrompt }] }],
-      }),
-    },
-  );
-
-  if (!res.ok) {
-    const body = await res.text().catch(() => '');
-    const msg = `Gemini error ${res.status}${body ? `: ${body.slice(0, 200)}` : ''}`;
-    log.error('getCoachPlan failed', msg);
-    throw new Error(msg);
-  }
-
-  const json = await res.json();
-  // Gemini 2.5 Flash returns thinking in parts[0] (thought:true) and content in parts[1]
-  const parts: Array<{ text?: string; thought?: boolean }> = json.candidates?.[0]?.content?.parts ?? [];
-  const text: string = (parts.find((p) => !p.thought) ?? parts[0])?.text ?? '';
-
-  const start = text.indexOf('{');
-  const end = text.lastIndexOf('}');
-  if (start === -1 || end <= start) {
+  const text = await callGemini({ contents: [{ parts: [{ text: fullPrompt }] }] });
+  try {
+    const plan = JSON.parse(extractJSON(text)) as CoachPlan;
+    log.info('getCoachPlan success', plan.model);
+    return plan;
+  } catch {
     log.error('getCoachPlan: no JSON in response', text.slice(0, 100));
     throw new Error('No JSON found in Gemini response');
   }
-
-  const plan = JSON.parse(text.slice(start, end + 1)) as CoachPlan;
-  log.info('getCoachPlan success', plan.model);
-  return plan;
 }
 
 // ── Money AI chat ─────────────────────────────────────────────────────────────
@@ -191,8 +166,6 @@ export async function getAIReply(
   history: Array<{ role: 'user' | 'ai'; text: string }>,
 ): Promise<AIReply> {
   log.info('getAIReply start', `history=${history.length} turns`);
-  const apiKey = process.env.EXPO_PUBLIC_GEMINI_API_KEY;
-  if (!apiKey) { log.error('EXPO_PUBLIC_GEMINI_API_KEY not set'); throw new Error('NO_API_KEY'); }
 
   const categoryLine = financials.byCategory
     ? `\n- Categories: ${formatCategory(financials.byCategory)}`
@@ -218,48 +191,23 @@ Return ONLY valid JSON — no markdown fences, no extra text:
 {"text": "your reply here", "action": {"label": "Short title", "description": "One-line description"} or null}`;
 
   // Build multi-turn contents; map 'ai' → 'model' for Gemini
-  const contents: Array<{ role: string; parts: Array<{ text: string }> }> = [];
-  for (const turn of history) {
-    contents.push({ role: turn.role === 'user' ? 'user' : 'model', parts: [{ text: turn.text }] });
+  const contents = [
+    ...history.map((turn) => ({
+      role: turn.role === 'user' ? 'user' : 'model',
+      parts: [{ text: turn.text }],
+    })),
+    { role: 'user', parts: [{ text: message }] },
+  ];
+
+  const text = await callGemini({ systemInstruction: { parts: [{ text: systemText }] }, contents });
+  try {
+    const reply = JSON.parse(extractJSON(text)) as AIReply;
+    log.info('getAIReply success', reply.action ? `action=${reply.action.label}` : 'no action');
+    return reply;
+  } catch (e) {
+    log.warn('getAIReply JSON parse failed, falling back to plain text', e);
+    return { text: text.trim() || 'Sorry, I had trouble with that. Please try again.', action: null };
   }
-  contents.push({ role: 'user', parts: [{ text: message }] });
-
-  const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
-    {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        systemInstruction: { parts: [{ text: systemText }] },
-        contents,
-      }),
-    },
-  );
-
-  if (!res.ok) {
-    const body = await res.text().catch(() => '');
-    const msg = `Gemini error ${res.status}${body ? `: ${body.slice(0, 120)}` : ''}`;
-    log.error('getAIReply failed', msg);
-    throw new Error(msg);
-  }
-
-  const json = await res.json();
-  const replyParts: Array<{ text?: string; thought?: boolean }> = json.candidates?.[0]?.content?.parts ?? [];
-  const text: string = (replyParts.find((p) => !p.thought) ?? replyParts[0])?.text ?? '';
-
-  const start = text.indexOf('{');
-  const end = text.lastIndexOf('}');
-  if (start !== -1 && end > start) {
-    try {
-      const reply = JSON.parse(text.slice(start, end + 1)) as AIReply;
-      log.info('getAIReply success', reply.action ? `action=${reply.action.label}` : 'no action');
-      return reply;
-    } catch (e) {
-      log.warn('getAIReply JSON parse failed, falling back to plain text', e);
-    }
-  }
-
-  return { text: text.trim() || 'Sorry, I had trouble with that. Please try again.', action: null };
 }
 
 // ── Model options picker ──────────────────────────────────────────────────────
@@ -309,8 +257,6 @@ export async function getModelOptions(
   language = 'en',
 ): Promise<ModelOptions> {
   log.info('getModelOptions start', `lang=${language}`);
-  const apiKey = process.env.EXPO_PUBLIC_GEMINI_API_KEY;
-  if (!apiKey) { log.error('EXPO_PUBLIC_GEMINI_API_KEY not set'); throw new Error('NO_API_KEY'); }
 
   const langName = LANG_NAMES[language] ?? 'English';
   const categoryLine = financials.byCategory
@@ -328,34 +274,13 @@ User profile:
 - Savings rate: ${financials.savingsRate}%
 - Spending by method: Card RM ${financials.byMethod.card.toLocaleString('en-MY')}, E-wallet RM ${financials.byMethod.ewallet.toLocaleString('en-MY')}, Cash RM ${financials.byMethod.cash.toLocaleString('en-MY')}, Bank RM ${financials.byMethod.bank.toLocaleString('en-MY')}${categoryLine}`;
 
-  const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
-    {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }),
-    },
-  );
-
-  if (!res.ok) {
-    const body = await res.text().catch(() => '');
-    const msg = `Gemini error ${res.status}${body ? `: ${body.slice(0, 200)}` : ''}`;
-    log.error('getModelOptions failed', msg);
-    throw new Error(msg);
-  }
-
-  const json = await res.json();
-  const parts: Array<{ text?: string; thought?: boolean }> = json.candidates?.[0]?.content?.parts ?? [];
-  const text: string = (parts.find((p) => !p.thought) ?? parts[0])?.text ?? '';
-
-  const start = text.indexOf('{');
-  const end = text.lastIndexOf('}');
-  if (start === -1 || end <= start) {
+  const text = await callGemini({ contents: [{ parts: [{ text: prompt }] }] });
+  try {
+    const options = JSON.parse(extractJSON(text)) as ModelOptions;
+    log.info('getModelOptions success', `recommended=${options.recommended}, count=${options.options.length}`);
+    return options;
+  } catch {
     log.error('getModelOptions: no JSON in response', text.slice(0, 100));
     throw new Error('No JSON found in Gemini response');
   }
-
-  const options = JSON.parse(text.slice(start, end + 1)) as ModelOptions;
-  log.info('getModelOptions success', `recommended=${options.recommended}, count=${options.options.length}`);
-  return options;
 }

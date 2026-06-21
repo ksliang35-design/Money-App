@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useEffect, useState } from 'react';
 import { Alert, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -10,16 +11,108 @@ import { NotesScreen } from '@/components/notes-screen';
 import { MC, MF, MR, MS, fmt } from '@/constants/money-theme';
 import { useT } from '@/i18n';
 import type { Language } from '@/i18n';
+import { exportJSON, pickJSONFile } from '@/lib/backup';
 import { useAppData } from '@/store/AppDataProvider';
+
+const LAST_EXPORT_KEY = 'money-hub-last-export';
+
+function isValidBackup(obj: unknown): boolean {
+  if (typeof obj !== 'object' || obj === null) return false;
+  const b = obj as Record<string, unknown>;
+  return Array.isArray(b.incomes) && Array.isArray(b.expenses) && Array.isArray(b.goals);
+}
 
 export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
-  const { data, resetData, setLanguage, setAvatar } = useAppData();
+  const { data, importData, resetData, setLanguage, setAvatar } = useAppData();
   const t = useT();
   const [modalMode, setModalMode] = useState<IncomeModalMode>(null);
   const [langPickerOpen, setLangPickerOpen] = useState(false);
   const [notesOpen, setNotesOpen] = useState(false);
   const [avatarPickerOpen, setAvatarPickerOpen] = useState(false);
+  const [lastExportAt, setLastExportAt] = useState<string | null>(null);
+  const [backupBusy, setBackupBusy] = useState(false);
+
+  useEffect(() => {
+    AsyncStorage.getItem(LAST_EXPORT_KEY).then((v) => setLastExportAt(v));
+  }, []);
+
+  const showAlert = (title: string, msg: string) => {
+    if (Platform.OS === 'web') { window.alert(`${title}\n\n${msg}`); return; }
+    Alert.alert(title, msg);
+  };
+
+  const handleExport = async () => {
+    if (backupBusy) return;
+    setBackupBusy(true);
+    try {
+      const payload = JSON.stringify({
+        version: 1,
+        exportedAt: new Date().toISOString(),
+        name: data.name,
+        month: data.month,
+        incomes: data.incomes,
+        expenses: data.expenses,
+        goals: data.goals,
+        holdings: data.holdings ?? [],
+        notes: data.notes ?? [],
+        history: data.history,
+        coachProfile: data.coachProfile,
+        coachPlan: data.coachPlan,
+        language: data.language,
+        avatar: data.avatar,
+      }, null, 2);
+      await exportJSON(payload, 'money-hub-backup.json');
+      const now = new Date().toISOString();
+      await AsyncStorage.setItem(LAST_EXPORT_KEY, now);
+      setLastExportAt(now);
+    } catch (e: any) {
+      if (e?.message !== 'CANCELLED') showAlert('Export', t('backup.exportError'));
+    } finally {
+      setBackupBusy(false);
+    }
+  };
+
+  const handleImport = async () => {
+    if (backupBusy) return;
+    setBackupBusy(true);
+    try {
+      const text = await pickJSONFile();
+      if (!text) return;
+
+      let parsed: unknown;
+      try { parsed = JSON.parse(text); } catch {
+        showAlert('Import', t('backup.importError'));
+        return;
+      }
+      if (!isValidBackup(parsed)) {
+        showAlert('Import', t('backup.importError'));
+        return;
+      }
+
+      const doImport = () => {
+        importData(parsed as Parameters<typeof importData>[0]);
+        showAlert('Import', t('backup.importSuccess'));
+      };
+
+      if (Platform.OS === 'web') {
+        if (window.confirm(`${t('backup.confirmImportTitle')}\n\n${t('backup.confirmImportMsg')}`)) doImport();
+        return;
+      }
+      Alert.alert(
+        t('backup.confirmImportTitle'),
+        t('backup.confirmImportMsg'),
+        [
+          { text: t('common.cancel'), style: 'cancel' },
+          { text: t('backup.confirmImportOk'), style: 'destructive', onPress: doImport },
+        ],
+      );
+    } catch {
+      showAlert('Import', t('backup.importError'));
+    } finally {
+      setBackupBusy(false);
+    }
+  };
 
   const handleReset = () => {
     if (Platform.OS === 'web') {
@@ -139,6 +232,44 @@ export default function ProfileScreen() {
             <Text style={styles.langArrow}>›</Text>
           </View>
         </Pressable>
+
+        {/* Backup & Restore */}
+        <View style={styles.card}>
+          <View style={styles.backupHeader}>
+            <Text style={styles.cardTitle}>{t('backup.title')}</Text>
+            <Text style={styles.backupMeta}>
+              {lastExportAt
+                ? t('backup.lastExport', { date: new Date(lastExportAt).toLocaleDateString() })
+                : t('backup.neverExported')}
+            </Text>
+          </View>
+
+          <Pressable
+            style={({ pressed }) => [styles.backupRow, pressed && styles.backupRowPressed]}
+            onPress={handleExport}
+            disabled={backupBusy}>
+            <Text style={styles.backupRowIcon}>📤</Text>
+            <View style={styles.backupRowBody}>
+              <Text style={styles.backupRowLabel}>{t('backup.exportBtn')}</Text>
+              <Text style={styles.backupRowSub}>{t('backup.exportSub')}</Text>
+            </View>
+            <Text style={styles.backupArrow}>›</Text>
+          </Pressable>
+
+          <View style={styles.backupDivider} />
+
+          <Pressable
+            style={({ pressed }) => [styles.backupRow, pressed && styles.backupRowPressed]}
+            onPress={handleImport}
+            disabled={backupBusy}>
+            <Text style={styles.backupRowIcon}>📥</Text>
+            <View style={styles.backupRowBody}>
+              <Text style={styles.backupRowLabel}>{t('backup.importBtn')}</Text>
+              <Text style={styles.backupRowSub}>{t('backup.importSub')}</Text>
+            </View>
+            <Text style={styles.backupArrow}>›</Text>
+          </Pressable>
+        </View>
 
         {/* App info */}
         <View style={styles.appInfo}>
@@ -288,4 +419,20 @@ const styles = StyleSheet.create({
   langRight: { flexDirection: 'row', alignItems: 'center', gap: MS.sm },
   langValue: { fontSize: 13, fontFamily: MF.regular, color: MC.muted },
   langArrow: { fontSize: 18, color: MC.muted },
+
+  backupHeader: { gap: 2, marginBottom: MS.xs },
+  backupMeta: { fontSize: 11, fontFamily: MF.regular, color: MC.muted },
+  backupRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: MS.md,
+    paddingVertical: MS.sm,
+  },
+  backupRowPressed: { opacity: 0.55 },
+  backupRowIcon: { fontSize: 22, width: 30, textAlign: 'center' },
+  backupRowBody: { flex: 1 },
+  backupRowLabel: { fontSize: 14, fontFamily: MF.semiBold, color: MC.ink },
+  backupRowSub: { fontSize: 11, fontFamily: MF.regular, color: MC.muted, marginTop: 1 },
+  backupArrow: { fontSize: 18, color: MC.muted },
+  backupDivider: { height: 1, backgroundColor: MC.line },
 });

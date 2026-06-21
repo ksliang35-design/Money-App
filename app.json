@@ -33,7 +33,8 @@
           "image": "./assets/Icon.png/Blaze Logo.png",
           "imageWidth": 200
         }
-      ]
+      ],
+      "expo-sharing"
     ],
     "experiments": {
       "typedRoutes": true,
