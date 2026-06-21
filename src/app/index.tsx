@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { AvatarDisplay } from '@/components/avatar-display';
 import { LanguagePicker } from '@/components/language-picker';
 import { MoneyAIOverlay } from '@/components/money-ai-overlay';
 import { MC, MF, MR, MS, fmt } from '@/constants/money-theme';
@@ -49,11 +50,7 @@ export default function DashboardScreen() {
             {/* Profile icon — top-left, navigates to Profile screen */}
             <Link href="/profile" asChild>
               <Pressable hitSlop={8}>
-                <LinearGradient
-                  colors={[MC.emerald, MC.emeraldDark]}
-                  style={styles.profileBadge}>
-                  <Text style={styles.profileInitials}>{initials}</Text>
-                </LinearGradient>
+                <AvatarDisplay config={data.avatar} initials={initials} size={40} />
               </Pressable>
             </Link>
             <View>
@@ -277,19 +274,6 @@ const styles = StyleSheet.create({
     gap: MS.md,
     flex: 1,
   },
-  profileBadge: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: MC.emerald,
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.35,
-    shadowRadius: 6,
-    elevation: 4,
-  },
-  profileInitials: { fontSize: 15, fontFamily: MF.bold, color: '#fff' },
   greeting: { fontSize: 17, fontFamily: MF.bold, color: MC.ink },
   month: { fontSize: 12, fontFamily: MF.regular, color: MC.muted, marginTop: 1 },
 

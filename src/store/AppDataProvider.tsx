@@ -6,6 +6,7 @@ import { MOCK, type Expense, type ExpenseCategory, type Goal, type Holding, type
 import type { CoachProfile, CoachPlan } from '@/lib/coach';
 import type { Language } from '@/i18n';
 import { getLogger } from '@/lib/logger';
+import type { AvatarConfig } from '@/constants/avatar';
 
 const log = getLogger('AppDataProvider');
 
@@ -26,6 +27,7 @@ interface RawData {
   coachProfile: CoachProfile | null;
   coachPlan: CoachPlan | null;
   language: Language | null;
+  avatar: AvatarConfig | null;
 }
 
 export interface DerivedData extends RawData {
@@ -63,6 +65,7 @@ interface AppDataContextValue {
   saveCoachResult: (profile: CoachProfile, plan: CoachPlan) => void;
   clearCoachResult: () => void;
   setLanguage: (lang: Language) => void;
+  setAvatar: (config: AvatarConfig) => void;
 }
 
 const defaultRaw: RawData = {
@@ -77,6 +80,7 @@ const defaultRaw: RawData = {
   coachProfile: null,
   coachPlan: null,
   language: null,
+  avatar: null,
 };
 
 function derive(raw: RawData): DerivedData {
@@ -217,6 +221,10 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     setLanguage: (lang: Language) => {
       log.info('language set', lang);
       setRaw((r) => ({ ...r, language: lang }));
+    },
+    setAvatar: (config: AvatarConfig) => {
+      log.info('avatar set', config.type, config.colour);
+      setRaw((r) => ({ ...r, avatar: config }));
     },
   }), []); // eslint-disable-line react-hooks/exhaustive-deps
 

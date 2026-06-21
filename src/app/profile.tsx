@@ -1,8 +1,9 @@
-import { LinearGradient } from 'expo-linear-gradient';
 import { useState } from 'react';
 import { Alert, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { AvatarDisplay } from '@/components/avatar-display';
+import { AvatarPicker } from '@/components/avatar-picker';
 import { IncomeEditModal, type IncomeModalMode } from '@/components/income-edit-modal';
 import { LanguagePicker } from '@/components/language-picker';
 import { NotesScreen } from '@/components/notes-screen';
@@ -13,11 +14,12 @@ import { useAppData } from '@/store/AppDataProvider';
 
 export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
-  const { data, resetData, setLanguage } = useAppData();
+  const { data, resetData, setLanguage, setAvatar } = useAppData();
   const t = useT();
   const [modalMode, setModalMode] = useState<IncomeModalMode>(null);
   const [langPickerOpen, setLangPickerOpen] = useState(false);
   const [notesOpen, setNotesOpen] = useState(false);
+  const [avatarPickerOpen, setAvatarPickerOpen] = useState(false);
 
   const handleReset = () => {
     if (Platform.OS === 'web') {
@@ -54,11 +56,9 @@ export default function ProfileScreen() {
 
         {/* Avatar + name */}
         <View style={styles.avatarSection}>
-          <LinearGradient
-            colors={[MC.emerald, MC.emeraldDark]}
-            style={styles.avatar}>
-            <Text style={styles.avatarText}>{initials}</Text>
-          </LinearGradient>
+          <Pressable onPress={() => setAvatarPickerOpen(true)} hitSlop={8}>
+            <AvatarDisplay config={data.avatar} initials={initials} size={80} />
+          </Pressable>
           <Text style={styles.name}>{data.name}</Text>
           <Text style={styles.nameSub}>{t('profile.snapshot', { month: data.month })}</Text>
         </View>
@@ -158,6 +158,14 @@ export default function ProfileScreen() {
           />
         )}
 
+        <AvatarPicker
+          visible={avatarPickerOpen}
+          current={data.avatar}
+          initials={initials}
+          onChange={(cfg) => setAvatar(cfg)}
+          onClose={() => setAvatarPickerOpen(false)}
+        />
+
         <View style={{ height: MS.xxl }} />
       </ScrollView>
 
@@ -176,19 +184,6 @@ const styles = StyleSheet.create({
   content: { padding: MS.lg, gap: MS.md },
 
   avatarSection: { alignItems: 'center', paddingVertical: MS.xl, gap: MS.sm },
-  avatar: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: MC.emerald,
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.4,
-    shadowRadius: 12,
-    elevation: 6,
-  },
-  avatarText: { fontSize: 28, fontFamily: MF.bold, color: '#fff' },
   name: { fontSize: 24, fontFamily: MF.bold, color: MC.ink },
   nameSub: { fontSize: 13, fontFamily: MF.regular, color: MC.muted },
 
