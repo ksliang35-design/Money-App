@@ -180,7 +180,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       setRaw((r) => ({ ...r, holdings: (r.holdings ?? []).map((h) => (h.id === id ? { ...h, ...updates } : h)) }));
     },
     addHolding: (holding: Omit<Holding, 'id'>) => {
-      log.debug('addHolding', holding.ticker);
+      log.debug('addHolding', holding.name);
       setRaw((r) => ({ ...r, holdings: [...(r.holdings ?? []), { ...holding, id: nextId('h') }] }));
     },
     deleteHolding: (id: string) => {
