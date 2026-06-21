@@ -197,6 +197,17 @@ export default function DashboardScreen() {
           </Pressable>
         </Link>
 
+        <Link href="/reports" asChild>
+          <Pressable style={({ pressed }) => [styles.hubCard, pressed && styles.hubCardPressed]}>
+            <Text style={styles.hubIcon}>📊</Text>
+            <View style={styles.hubBody}>
+              <Text style={styles.hubTitle}>{t('reports.title')}</Text>
+              <Text style={styles.hubSub}>{t('reports.hubSub')}</Text>
+            </View>
+            <Text style={styles.hubArrow}>›</Text>
+          </Pressable>
+        </Link>
+
         <View style={{ height: MS.xxl }} />
       </ScrollView>
 

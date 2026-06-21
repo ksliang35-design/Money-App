@@ -2,6 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useEffect, useState } from 'react';
 import { Alert, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Link } from 'expo-router';
 
 import { AvatarDisplay } from '@/components/avatar-display';
 import { AvatarPicker } from '@/components/avatar-picker';
@@ -212,6 +213,17 @@ export default function ProfileScreen() {
               : t('profile.independenceHigh')}
           </Text>
         </View>
+
+        {/* Reports row */}
+        <Link href="/reports" asChild>
+          <Pressable style={styles.langRow}>
+            <Text style={styles.langLabel}>{t('reports.title')}</Text>
+            <View style={styles.langRight}>
+              <Text style={styles.langValue}>📊</Text>
+              <Text style={styles.langArrow}>›</Text>
+            </View>
+          </Pressable>
+        </Link>
 
         {/* Notes row */}
         <Pressable style={styles.langRow} onPress={() => setNotesOpen(true)}>
