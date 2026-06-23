@@ -62,6 +62,7 @@ interface AppDataContextValue {
   addNote: (note: Omit<Note, 'id'>) => void;
   deleteNote: (id: string) => void;
   importData: (incoming: Partial<RawData>) => void;
+  setName: (name: string) => void;
   resetData: () => void;
   saveCoachResult: (profile: CoachProfile, plan: CoachPlan) => void;
   clearCoachResult: () => void;
@@ -209,6 +210,10 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     importData: (incoming: Partial<RawData>) => {
       log.info('data imported from backup');
       setRaw({ ...defaultRaw, ...incoming });
+    },
+    setName: (name: string) => {
+      log.info('name updated', name);
+      setRaw((r) => ({ ...r, name: name.trim() || r.name }));
     },
     resetData: () => {
       log.info('data reset to defaults');

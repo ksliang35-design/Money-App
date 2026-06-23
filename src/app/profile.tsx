@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useEffect, useState } from 'react';
-import { Alert, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Link } from 'expo-router';
 
@@ -25,7 +25,7 @@ function isValidBackup(obj: unknown): boolean {
 
 export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
-  const { data, importData, resetData, setLanguage, setAvatar } = useAppData();
+  const { data, importData, resetData, setLanguage, setAvatar, setName } = useAppData();
   const t = useT();
   const [modalMode, setModalMode] = useState<IncomeModalMode>(null);
   const [langPickerOpen, setLangPickerOpen] = useState(false);
@@ -33,6 +33,8 @@ export default function ProfileScreen() {
   const [avatarPickerOpen, setAvatarPickerOpen] = useState(false);
   const [lastExportAt, setLastExportAt] = useState<string | null>(null);
   const [backupBusy, setBackupBusy] = useState(false);
+  const [editingName, setEditingName] = useState(false);
+  const [nameInput, setNameInput] = useState(data.name);
 
   useEffect(() => {
     AsyncStorage.getItem(LAST_EXPORT_KEY).then((v) => setLastExportAt(v));
@@ -153,7 +155,33 @@ export default function ProfileScreen() {
           <Pressable onPress={() => setAvatarPickerOpen(true)} hitSlop={8}>
             <AvatarDisplay config={data.avatar} initials={initials} size={80} />
           </Pressable>
-          <Text style={styles.name}>{data.name}</Text>
+          {editingName ? (
+            <View style={styles.nameEditRow}>
+              <TextInput
+                style={styles.nameInput}
+                value={nameInput}
+                onChangeText={setNameInput}
+                autoFocus
+                maxLength={30}
+                returnKeyType="done"
+                onSubmitEditing={() => {
+                  setName(nameInput);
+                  setEditingName(false);
+                }}
+                onBlur={() => {
+                  setName(nameInput);
+                  setEditingName(false);
+                }}
+              />
+            </View>
+          ) : (
+            <Pressable onPress={() => { setNameInput(data.name); setEditingName(true); }} hitSlop={8}>
+              <View style={styles.nameRow}>
+                <Text style={styles.name}>{data.name}</Text>
+                <Text style={styles.nameEditIcon}>✎</Text>
+              </View>
+            </Pressable>
+          )}
           <Text style={styles.nameSub}>{t('profile.snapshot', { month: data.month })}</Text>
         </View>
 
@@ -327,7 +355,19 @@ const styles = StyleSheet.create({
   content: { padding: MS.lg, gap: MS.md },
 
   avatarSection: { alignItems: 'center', paddingVertical: MS.xl, gap: MS.sm },
+  nameRow: { flexDirection: 'row', alignItems: 'center', gap: MS.xs },
   name: { fontSize: 24, fontFamily: MF.bold, color: MC.ink },
+  nameEditIcon: { fontSize: 16, color: MC.muted, marginTop: 4 },
+  nameEditRow: { width: '70%' },
+  nameInput: {
+    fontSize: 24,
+    fontFamily: MF.bold,
+    color: MC.ink,
+    borderBottomWidth: 2,
+    borderBottomColor: MC.emerald,
+    textAlign: 'center',
+    paddingVertical: MS.xs,
+  },
   nameSub: { fontSize: 13, fontFamily: MF.regular, color: MC.muted },
 
   statsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: MS.sm },
