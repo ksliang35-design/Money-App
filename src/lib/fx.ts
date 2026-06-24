@@ -26,11 +26,10 @@ export function convertCcy(
   return fromRM(toRM(amount, from, rates), to, rates);
 }
 
-/** Format with currency code prefix. RM uses 0 dp; USD/HKD use 2 dp. */
+/** Format with currency code prefix. All currencies show exactly 2 decimal places. */
 export function fmtCcy(n: number, ccy: HoldingCurrency): string {
-  const dp = ccy === 'RM' ? 0 : 2;
-  return `${ccy} ${Number(n || 0).toLocaleString('en-MY', {
-    minimumFractionDigits: 0,
-    maximumFractionDigits: dp,
+  return `${ccy} ${Number(n || 0).toLocaleString('en-MY', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
   })}`;
 }

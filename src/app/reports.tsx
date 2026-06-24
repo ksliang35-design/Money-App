@@ -167,7 +167,7 @@ export default function ReportsScreen() {
               const isCurrent = i === data.history.length - 1;
               const net = Math.max(0, h.net);
               const barH = Math.max(6, (net / maxHistNet) * 80);
-              const amtLabel = net >= 1000 ? `RM${Math.round(net / 1000)}k` : net > 0 ? `RM${Math.round(net)}` : '–';
+              const amtLabel = net > 0 ? fmt(net) : '–';
               return (
                 <View key={h.month} style={styles.trendCol}>
                   <Text style={[styles.trendAmt, isCurrent && { color: C.gold }]}>

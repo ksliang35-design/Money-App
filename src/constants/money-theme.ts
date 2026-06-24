@@ -39,4 +39,4 @@ export const MR = {
 } as const;
 
 export const fmt = (n: number) =>
-  'RM ' + Number(n || 0).toLocaleString('en-MY', { maximumFractionDigits: 0 });
+  'RM ' + Number(n || 0).toLocaleString('en-MY', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
