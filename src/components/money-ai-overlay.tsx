@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useRef, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -13,7 +13,9 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { MC, MF, MR, MS, fmt } from '@/constants/money-theme';
+import { MF, MR, MS } from '@/constants/money-theme';
+import { type AppTheme } from '@/constants/theme';
+import { useTheme } from '@/hooks/useTheme';
 import { useT } from '@/i18n';
 import { getAIReply } from '@/lib/coach';
 import { useAppData } from '@/store/AppDataProvider';
@@ -31,6 +33,8 @@ export function MoneyAIOverlay({ visible, onClose }: Props) {
   const scrollRef = useRef<ScrollView>(null);
   const { data } = useAppData();
   const t = useT();
+  const C = useTheme();
+  const styles = useMemo(() => makeStyles(C), [C]);
 
   const QUICK_ACTIONS = [
     { icon: '🔍', label: t('ai.weeklyCheck'), q: 'Give me a quick weekly financial check.' },
@@ -65,7 +69,6 @@ export function MoneyAIOverlay({ visible, onClose }: Props) {
             .join(', ')
         : 'No goals set yet';
 
-      // Pass previous conversation (skip greeting, last 8 msgs)
       const history = messages
         .slice(1)
         .slice(-8)
@@ -144,7 +147,7 @@ export function MoneyAIOverlay({ visible, onClose }: Props) {
             {loading && (
               <View style={[styles.bubble, styles.bubbleAI]}>
                 <Text style={styles.bubbleWho}>♞ Money AI</Text>
-                <ActivityIndicator size="small" color={MC.emerald} style={{ marginTop: 2 }} />
+                <ActivityIndicator size="small" color={C.emerald} style={{ marginTop: 2 }} />
               </View>
             )}
           </ScrollView>
@@ -171,7 +174,7 @@ export function MoneyAIOverlay({ visible, onClose }: Props) {
             <TextInput
               style={styles.input}
               placeholder={t('ai.placeholder')}
-              placeholderTextColor={MC.muted}
+              placeholderTextColor={C.muted}
               value={input}
               onChangeText={setInput}
               onSubmitEditing={() => send(input)}
@@ -221,141 +224,125 @@ export function MoneyAIOverlay({ visible, onClose }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
-  flex: { flex: 1 },
-  container: { flex: 1, backgroundColor: MC.bg },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: MS.lg,
-    paddingVertical: MS.md,
-    backgroundColor: MC.emerald,
-  },
-  headerLeft: { flexDirection: 'row', alignItems: 'center', gap: MS.sm },
-  horse: { fontSize: 28, color: '#fff' },
-  headerTitle: { fontSize: 18, fontFamily: MF.bold, color: '#fff' },
-  headerSub: { fontSize: 11, color: 'rgba(255,255,255,0.75)', marginTop: 1 },
-  closeBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  closeBtnText: { color: '#fff', fontSize: 14, fontFamily: MF.bold },
-  chat: { flex: 1 },
-  chatContent: { padding: MS.lg, gap: MS.md, flexGrow: 1, justifyContent: 'flex-end' },
-  bubble: {
-    maxWidth: '86%',
-    padding: MS.md,
-    borderRadius: MR.lg,
-  },
-  bubbleAI: {
-    backgroundColor: MC.card,
-    borderWidth: 1,
-    borderColor: MC.line,
-    borderBottomLeftRadius: 4,
-    alignSelf: 'flex-start',
-  },
-  bubbleUser: {
-    backgroundColor: MC.emerald,
-    borderBottomRightRadius: 4,
-    alignSelf: 'flex-end',
-  },
-  bubbleWho: {
-    fontSize: 10,
-    fontFamily: MF.bold,
-    color: MC.emeraldDark,
-    marginBottom: 3,
-  },
-  bubbleText: {
-    fontSize: 13.5,
-    fontFamily: MF.regular,
-    color: MC.ink,
-    lineHeight: 20,
-  },
-  bubbleTextUser: { color: '#fff' },
-  quickScroll: { flexShrink: 0 },
-  quickContent: { paddingHorizontal: MS.lg, paddingVertical: MS.sm, gap: MS.sm, alignItems: 'center' },
-  quickChip: {
-    backgroundColor: MC.card,
-    borderWidth: 1,
-    borderColor: MC.line,
-    borderRadius: 999,
-    paddingHorizontal: MS.md,
-    paddingVertical: MS.sm,
-  },
-  quickChipDisabled: { opacity: 0.4 },
-  quickChipText: {
-    fontSize: 12,
-    fontFamily: MF.semiBold,
-    color: MC.emeraldDark,
-  },
-  inputRow: {
-    flexDirection: 'row',
-    gap: MS.sm,
-    paddingHorizontal: MS.lg,
-    paddingTop: MS.sm,
-    backgroundColor: MC.bg,
-  },
-  input: {
-    flex: 1,
-    backgroundColor: MC.card,
-    borderWidth: 1,
-    borderColor: MC.line,
-    borderRadius: 999,
-    paddingHorizontal: MS.lg,
-    paddingVertical: MS.md,
-    fontSize: 14,
-    fontFamily: MF.regular,
-    color: MC.ink,
-  },
-  sendBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: MC.gold,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  sendBtnDisabled: { opacity: 0.4 },
-  sendBtnText: { color: '#fff', fontSize: 18, fontFamily: MF.bold },
-  confirmBackdrop: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(21,36,30,0.55)',
-    justifyContent: 'center',
-    padding: MS.xxl,
-  },
-  confirmCard: {
-    backgroundColor: MC.card,
-    borderRadius: MR.xl,
-    padding: MS.xxl,
-    gap: MS.md,
-  },
-  confirmTitle: { fontSize: 17, fontFamily: MF.bold, color: MC.ink },
-  confirmDesc: { fontSize: 14, fontFamily: MF.regular, color: MC.muted, lineHeight: 21 },
-  confirmBtns: { flexDirection: 'row', gap: MS.sm, marginTop: MS.sm },
-  confirmNot: {
-    flex: 1,
-    paddingVertical: MS.md,
-    borderRadius: MR.md,
-    borderWidth: 1,
-    borderColor: MC.line,
-    alignItems: 'center',
-  },
-  confirmNotText: { fontSize: 14, fontFamily: MF.semiBold, color: MC.muted },
-  confirmOk: {
-    flex: 1,
-    paddingVertical: MS.md,
-    borderRadius: MR.md,
-    backgroundColor: MC.emerald,
-    alignItems: 'center',
-  },
-  confirmOkText: { fontSize: 14, fontFamily: MF.semiBold, color: '#fff' },
-});
+function makeStyles(C: AppTheme) {
+  return StyleSheet.create({
+    flex: { flex: 1 },
+    container: { flex: 1, backgroundColor: C.bg },
+    header: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: MS.lg,
+      paddingVertical: MS.md,
+      backgroundColor: C.emerald,
+    },
+    headerLeft: { flexDirection: 'row', alignItems: 'center', gap: MS.sm },
+    horse: { fontSize: 28, color: '#fff' },
+    headerTitle: { fontSize: 18, fontFamily: MF.bold, color: '#fff' },
+    headerSub: { fontSize: 11, color: 'rgba(255,255,255,0.75)', marginTop: 1 },
+    closeBtn: {
+      width: 32,
+      height: 32,
+      borderRadius: 16,
+      backgroundColor: 'rgba(255,255,255,0.2)',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    closeBtnText: { color: '#fff', fontSize: 14, fontFamily: MF.bold },
+    chat: { flex: 1 },
+    chatContent: { padding: MS.lg, gap: MS.md, flexGrow: 1, justifyContent: 'flex-end' },
+    bubble: { maxWidth: '86%', padding: MS.md, borderRadius: MR.lg },
+    bubbleAI: {
+      backgroundColor: C.card,
+      borderWidth: 1,
+      borderColor: C.line,
+      borderBottomLeftRadius: 4,
+      alignSelf: 'flex-start',
+    },
+    bubbleUser: {
+      backgroundColor: C.emerald,
+      borderBottomRightRadius: 4,
+      alignSelf: 'flex-end',
+    },
+    bubbleWho: { fontSize: 10, fontFamily: MF.bold, color: C.emeraldDark, marginBottom: 3 },
+    bubbleText: { fontSize: 13.5, fontFamily: MF.regular, color: C.ink, lineHeight: 20 },
+    bubbleTextUser: { color: '#fff' },
+    quickScroll: { flexShrink: 0 },
+    quickContent: { paddingHorizontal: MS.lg, paddingVertical: MS.sm, gap: MS.sm, alignItems: 'center' },
+    quickChip: {
+      backgroundColor: C.card,
+      borderWidth: 1,
+      borderColor: C.line,
+      borderRadius: 999,
+      paddingHorizontal: MS.md,
+      paddingVertical: MS.sm,
+    },
+    quickChipDisabled: { opacity: 0.4 },
+    quickChipText: { fontSize: 12, fontFamily: MF.semiBold, color: C.emeraldDark },
+    inputRow: {
+      flexDirection: 'row',
+      gap: MS.sm,
+      paddingHorizontal: MS.lg,
+      paddingTop: MS.sm,
+      backgroundColor: C.bg,
+    },
+    input: {
+      flex: 1,
+      backgroundColor: C.card,
+      borderWidth: 1,
+      borderColor: C.line,
+      borderRadius: 999,
+      paddingHorizontal: MS.lg,
+      paddingVertical: MS.md,
+      fontSize: 14,
+      fontFamily: MF.regular,
+      color: C.ink,
+    },
+    sendBtn: {
+      width: 44,
+      height: 44,
+      borderRadius: 22,
+      backgroundColor: C.gold,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    sendBtnDisabled: { opacity: 0.4 },
+    sendBtnText: { color: '#fff', fontSize: 18, fontFamily: MF.bold },
+    confirmBackdrop: {
+      position: 'absolute',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      backgroundColor: C.backdrop,
+      justifyContent: 'center',
+      padding: MS.xxl,
+    },
+    confirmCard: {
+      backgroundColor: C.card,
+      borderRadius: MR.xl,
+      padding: MS.xxl,
+      gap: MS.md,
+    },
+    confirmTitle: { fontSize: 17, fontFamily: MF.bold, color: C.ink },
+    confirmDesc: { fontSize: 14, fontFamily: MF.regular, color: C.muted, lineHeight: 21 },
+    confirmBtns: { flexDirection: 'row', gap: MS.sm, marginTop: MS.sm },
+    confirmNot: {
+      flex: 1,
+      paddingVertical: MS.md,
+      borderRadius: MR.md,
+      borderWidth: 1,
+      borderColor: C.line,
+      alignItems: 'center',
+    },
+    confirmNotText: { fontSize: 14, fontFamily: MF.semiBold, color: C.muted },
+    confirmOk: {
+      flex: 1,
+      paddingVertical: MS.md,
+      borderRadius: MR.md,
+      backgroundColor: C.emerald,
+      alignItems: 'center',
+    },
+    confirmOkText: { fontSize: 14, fontFamily: MF.semiBold, color: '#fff' },
+  });
+}

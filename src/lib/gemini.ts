@@ -6,8 +6,8 @@ const GEMINI_URL =
   'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent';
 
 interface GeminiBody {
-  contents: Array<{ role?: string; parts: Array<{ text: string }> }>;
-  systemInstruction?: { parts: Array<{ text: string }> };
+  contents: { role?: string; parts: { text: string }[] }[];
+  systemInstruction?: { parts: { text: string }[] };
 }
 
 export async function callGemini(body: GeminiBody): Promise<string> {
@@ -31,7 +31,7 @@ export async function callGemini(body: GeminiBody): Promise<string> {
   }
 
   const json = await res.json();
-  const parts: Array<{ text?: string; thought?: boolean }> =
+  const parts: { text?: string; thought?: boolean }[] =
     json.candidates?.[0]?.content?.parts ?? [];
   return (parts.find((p) => !p.thought) ?? parts[0])?.text ?? '';
 }

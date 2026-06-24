@@ -8,11 +8,12 @@ import {
 import { DarkTheme, DefaultTheme, ThemeProvider } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
-import { useColorScheme } from 'react-native';
 
 import AppTabs from '@/components/app-tabs';
 import { LanguagePicker } from '@/components/language-picker';
 import { AppDataProvider, useAppData } from '@/store/AppDataProvider';
+import { DARK } from '@/constants/theme';
+import { useTheme } from '@/hooks/useTheme';
 import type { Language } from '@/i18n';
 
 SplashScreen.preventAutoHideAsync();
@@ -26,9 +27,16 @@ function LanguageGate() {
   return <AppTabs />;
 }
 
-export default function TabLayout() {
-  const colorScheme = useColorScheme();
+function ThemedApp() {
+  const C = useTheme();
+  return (
+    <ThemeProvider value={C === DARK ? DarkTheme : DefaultTheme}>
+      <LanguageGate />
+    </ThemeProvider>
+  );
+}
 
+export default function TabLayout() {
   const [fontsLoaded] = useFonts({
     PlusJakartaSans_400Regular,
     PlusJakartaSans_500Medium,
@@ -44,9 +52,7 @@ export default function TabLayout() {
 
   return (
     <AppDataProvider>
-      <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-        <LanguageGate />
-      </ThemeProvider>
+      <ThemedApp />
     </AppDataProvider>
   );
 }

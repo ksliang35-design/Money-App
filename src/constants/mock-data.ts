@@ -1,4 +1,6 @@
 export type AssetType = 'Stocks' | 'ETF' | 'Crypto' | 'Gold' | 'Cash' | 'Other';
+export type HoldingCurrency = 'RM' | 'USD' | 'HKD';
+export type FxRates = { USD: number; HKD: number };
 
 export type NoteTag = 'owed_to_me' | 'i_owe' | 'to_claim' | 'reminder' | 'general';
 
@@ -38,8 +40,9 @@ export interface Holding {
   name: string;
   assetType: AssetType;
   units?: number;
-  buyPrice?: number;
-  currentValue: number;
+  buyPrice?: number;       // in the holding's own currency
+  currentValue: number;    // in the holding's own currency
+  currency?: HoldingCurrency; // defaults to 'RM' when absent (backward-compat)
 }
 
 export const MOCK = {
@@ -96,7 +99,7 @@ export const MOCK = {
   holdings: [
     { id: 'h1', name: 'Maybank',          assetType: 'Stocks' as AssetType, units: 500, buyPrice: 8.5, currentValue: 4500 },
     { id: 'h2', name: 'MyETF Dow Jones',  assetType: 'ETF'    as AssetType, units: 200, buyPrice: 1.2, currentValue: 280  },
-    { id: 'h3', name: 'Bitcoin',          assetType: 'Crypto' as AssetType, currentValue: 2800 },
+    { id: 'h3', name: 'Bitcoin',          assetType: 'Crypto' as AssetType, currentValue: 629, currency: 'USD' as HoldingCurrency },
     { id: 'h4', name: 'Public Gold 5g',   assetType: 'Gold'   as AssetType, currentValue: 1600 },
     { id: 'h5', name: 'FD / Cash savings', assetType: 'Cash'  as AssetType, currentValue: 5000 },
   ] as Holding[],

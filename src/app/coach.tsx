@@ -1,8 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { MC, MF, MR, MS, fmt } from '@/constants/money-theme';
+import { MF, MR, MS, fmt } from '@/constants/money-theme';
+import { type AppTheme } from '@/constants/theme';
+import { useTheme } from '@/hooks/useTheme';
 import {
   getCoachPlan,
   getModelOptions,
@@ -21,7 +23,6 @@ interface Answers {
   goal: string | null;
 }
 
-// Values sent to Gemini always stay in English
 const AGE_OPTIONS = ['Under 25', '25–34', '35–44', '45–54', '55+'];
 
 const INCOME_BRACKETS = [
@@ -32,7 +33,6 @@ const INCOME_BRACKETS = [
   { label: 'Over RM 12,000', min: 12000, max: Infinity },
 ];
 
-// value = sent to Gemini (English), labelKey = translated display key
 const GOAL_OPTIONS = [
   { value: 'Build savings', labelKey: 'coach.goalBuildSavings', icon: '🛡️' },
   { value: 'Clear debt', labelKey: 'coach.goalClearDebt', icon: '✂️' },
@@ -40,7 +40,6 @@ const GOAL_OPTIONS = [
   { value: 'Just get organized', labelKey: 'coach.goalGetOrganized', icon: '📋' },
 ];
 
-// Maps Gemini bucket labels → i18n guide keys. Covers all 9 models from the system prompt.
 const BUCKET_GUIDE_KEY: Record<string, string> = {
   'Needs':                 'coach.guideNeeds',
   'Wants':                 'coach.guideWants',
@@ -73,6 +72,8 @@ export default function CoachScreen() {
   const insets = useSafeAreaInsets();
   const { data, saveCoachResult, clearCoachResult } = useAppData();
   const t = useT();
+  const C = useTheme();
+  const styles = useMemo(() => makeStyles(C), [C]);
 
   const [step, setStep] = useState<Step>(data.coachPlan ? 'done' : 1);
   const [answers, setAnswers] = useState<Answers>(
@@ -83,27 +84,26 @@ export default function CoachScreen() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // editSplit: bucket label → user-adjusted percentage
   const [editSplit, setEditSplit] = useState<Record<string, number>>({});
   const [splitSaved, setSplitSaved] = useState(false);
+  const [splitInitKey, setSplitInitKey] = useState('');
 
   const suggestedBracket = incomeToBracket(data.income);
 
-  // Derive split from plan buckets whenever plan loads or model changes.
-  // Prefer stored split; fall back to deriving from Gemini's targetRM values.
-  useEffect(() => {
-    if (!plan || plan.buckets.length === 0) return;
-    if (plan.split && Object.keys(plan.split).length > 0) {
-      setEditSplit(plan.split);
+  // Sync editSplit when a new plan with buckets arrives (derive-during-render avoids setState-in-effect)
+  const planInitKey = plan && plan.buckets.length > 0 ? `${plan.model ?? ''}:${plan.buckets.length}` : '';
+  if (planInitKey && planInitKey !== splitInitKey) {
+    setSplitInitKey(planInitKey);
+    if (plan!.split && Object.keys(plan!.split).length > 0) {
+      setEditSplit(plan!.split);
     } else {
-      const bucketTotal = plan.buckets.reduce((s, b) => s + b.targetRM, 0);
+      const bucketTotal = plan!.buckets.reduce((s, b) => s + b.targetRM, 0);
       const denom = bucketTotal > 0 ? bucketTotal : data.income || 1;
-      const derived = Object.fromEntries(
-        plan.buckets.map((b) => [b.label, Math.round((b.targetRM / denom) * 100)]),
-      );
-      setEditSplit(derived);
+      setEditSplit(Object.fromEntries(
+        plan!.buckets.map((b) => [b.label, Math.round((b.targetRM / denom) * 100)]),
+      ));
     }
-  }, [plan?.model, plan?.buckets.length]); // eslint-disable-line react-hooks/exhaustive-deps
+  }
 
   const splitTotal = Object.values(editSplit).reduce((s, v) => s + v, 0);
   const isSplitValid = splitTotal === 100;
@@ -169,7 +169,6 @@ export default function CoachScreen() {
   };
 
   const handleSelectModel = (opt: ModelOption) => {
-    // Store the model's original split so the editor can show percentages before Gemini responds
     const chosen: CoachPlan = {
       model: opt.model,
       why: opt.why,
@@ -269,7 +268,6 @@ export default function CoachScreen() {
         <Text style={styles.screenTitle}>{t('coach.title')}</Text>
         <Text style={styles.screenSub}>{t('coach.sub')}</Text>
 
-        {/* Step progress bar */}
         {(step === 1 || step === 2 || step === 3) && (
           <View style={styles.progressRow}>
             {[1, 2, 3].map((n) => (
@@ -281,7 +279,6 @@ export default function CoachScreen() {
           </View>
         )}
 
-        {/* Q1: Age range */}
         {step === 1 && (
           <View style={styles.card}>
             <Text style={styles.stepBadge}>{t('coach.q1badge')}</Text>
@@ -306,7 +303,6 @@ export default function CoachScreen() {
           </View>
         )}
 
-        {/* Q2: Income bracket */}
         {step === 2 && (
           <View style={styles.card}>
             <Text style={styles.stepBadge}>{t('coach.q2badge')}</Text>
@@ -341,7 +337,6 @@ export default function CoachScreen() {
           </View>
         )}
 
-        {/* Q3: Main goal */}
         {step === 3 && (
           <View style={styles.card}>
             <Text style={styles.stepBadge}>{t('coach.q3badge')}</Text>
@@ -364,14 +359,13 @@ export default function CoachScreen() {
           </View>
         )}
 
-        {/* Pick step: Gemini returns options, user selects one */}
         {step === 'pick' && (
           <>
             {profileRecap}
 
             {loading && (
               <View style={styles.loadingCard}>
-                <ActivityIndicator size="large" color={MC.indigo} />
+                <ActivityIndicator size="large" color={C.indigo} />
                 <Text style={styles.loadingText}>{t('coach.loading')}</Text>
               </View>
             )}
@@ -444,12 +438,10 @@ export default function CoachScreen() {
           </>
         )}
 
-        {/* Done state */}
         {step === 'done' && (
           <>
             {profileRecap}
 
-            {/* Chosen model header */}
             {plan && (
               <View style={styles.chosenCard}>
                 <Text style={styles.chosenCheck}>✓</Text>
@@ -460,15 +452,13 @@ export default function CoachScreen() {
               </View>
             )}
 
-            {/* Loading breakdown */}
             {loading && (
               <View style={styles.loadingCard}>
-                <ActivityIndicator size="large" color={MC.indigo} />
+                <ActivityIndicator size="large" color={C.indigo} />
                 <Text style={styles.loadingText}>{t('coach.loading')}</Text>
               </View>
             )}
 
-            {/* Errors */}
             {!loading && error === 'NO_API_KEY' && (
               <View style={styles.noKeyCard}>
                 <Text style={styles.noKeyIcon}>🔑</Text>
@@ -489,11 +479,9 @@ export default function CoachScreen() {
               </View>
             )}
 
-            {/* ── Editable budget breakdown ── */}
             {!loading && !error && plan && plan.buckets.length > 0 && (
               <>
                 <View style={styles.card}>
-                  {/* Header row with save button */}
                   <View style={styles.editHeader}>
                     <Text style={styles.sectionLabel}>{t('coach.editSplit')}</Text>
                     <Pressable
@@ -513,7 +501,7 @@ export default function CoachScreen() {
                         ? Math.min(100, Math.round((bucket.actualRM / targetRM) * 100))
                         : 0;
                     const over = bucket.actualRM > targetRM;
-                    const fillColor = over ? MC.clay : MC.emerald;
+                    const fillColor = over ? C.clay : C.emerald;
                     const guideKey = BUCKET_GUIDE_KEY[bucket.label] ?? 'coach.guideGeneral';
 
                     return (
@@ -523,11 +511,9 @@ export default function CoachScreen() {
                           styles.bucketRow,
                           i < plan.buckets.length - 1 && styles.bucketRowBorder,
                         ]}>
-                        {/* Label + category guide */}
                         <Text style={styles.bucketLabel}>{bucket.label}</Text>
                         <Text style={styles.bucketGuide}>{t(guideKey)}</Text>
 
-                        {/* +/- controls + live RM */}
                         <View style={styles.splitRow}>
                           <Pressable
                             onPress={() =>
@@ -553,7 +539,6 @@ export default function CoachScreen() {
                           <Text style={styles.rmTarget}>{fmt(targetRM)}</Text>
                         </View>
 
-                        {/* Progress bar — actual vs adjusted target */}
                         <View style={styles.meterBg}>
                           <View
                             style={[
@@ -563,7 +548,6 @@ export default function CoachScreen() {
                           />
                         </View>
 
-                        {/* Actual vs target numbers */}
                         <View style={styles.bucketNums}>
                           <Text style={styles.bucketNum}>
                             {t('coach.actual')}{' '}
@@ -579,7 +563,6 @@ export default function CoachScreen() {
                     );
                   })}
 
-                  {/* Total row */}
                   <View style={styles.totalRow}>
                     <Text style={styles.totalLabel}>{t('coach.totalPct')}</Text>
                     <Text style={[styles.totalPct, !isSplitValid && styles.totalPctWarn]}>
@@ -587,7 +570,6 @@ export default function CoachScreen() {
                     </Text>
                   </View>
 
-                  {/* Warning + normalize */}
                   {!isSplitValid && (
                     <View style={styles.warnRow}>
                       <Text style={styles.warnText}>{t('coach.warnTotal')}</Text>
@@ -609,13 +591,12 @@ export default function CoachScreen() {
 
                 {!!plan.encouragement && (
                   <View style={styles.encourageCard}>
-                    <Text style={styles.encourageText}>"{plan.encouragement}"</Text>
+                    <Text style={styles.encourageText}>{'“'}{plan.encouragement}{'”'}</Text>
                   </View>
                 )}
               </>
             )}
 
-            {/* Placeholder: model chosen but breakdown not yet arrived */}
             {!loading && !error && plan && plan.buckets.length === 0 && (
               <View style={styles.placeholderCard}>
                 <Text style={styles.placeholderText}>{t('coach.breakdownSoon')}</Text>
@@ -639,347 +620,340 @@ export default function CoachScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: MC.bg },
-  scroll: { flex: 1 },
-  content: { padding: MS.lg, gap: MS.md },
+function makeStyles(C: AppTheme) {
+  return StyleSheet.create({
+    root: { flex: 1, backgroundColor: C.bg },
+    scroll: { flex: 1 },
+    content: { padding: MS.lg, gap: MS.md },
 
-  screenTitle: { fontSize: 26, fontFamily: MF.bold, color: MC.ink },
-  screenSub: { fontSize: 13, fontFamily: MF.regular, color: MC.muted, marginTop: -MS.sm },
+    screenTitle: { fontSize: 26, fontFamily: MF.bold, color: C.ink },
+    screenSub: { fontSize: 13, fontFamily: MF.regular, color: C.muted, marginTop: -MS.sm },
 
-  progressRow: { flexDirection: 'row', gap: MS.sm },
-  progressSeg: { flex: 1, height: 4, borderRadius: 2, backgroundColor: MC.line },
-  progressSegActive: { backgroundColor: MC.emerald },
+    progressRow: { flexDirection: 'row', gap: MS.sm },
+    progressSeg: { flex: 1, height: 4, borderRadius: 2, backgroundColor: C.line },
+    progressSegActive: { backgroundColor: C.emerald },
 
-  card: {
-    backgroundColor: MC.card,
-    borderWidth: 1,
-    borderColor: MC.line,
-    borderRadius: MR.xl,
-    padding: MS.lg,
-    gap: MS.sm,
-  },
+    card: {
+      backgroundColor: C.card,
+      borderWidth: 1,
+      borderColor: C.line,
+      borderRadius: MR.xl,
+      padding: MS.lg,
+      gap: MS.sm,
+    },
 
-  stepBadge: {
-    fontSize: 10,
-    fontFamily: MF.bold,
-    color: MC.muted,
-    textTransform: 'uppercase',
-    letterSpacing: 0.6,
-  },
-  question: { fontSize: 20, fontFamily: MF.bold, color: MC.ink, lineHeight: 28 },
-  questionSub: { fontSize: 13, fontFamily: MF.regular, color: MC.muted, lineHeight: 20 },
+    stepBadge: {
+      fontSize: 10,
+      fontFamily: MF.bold,
+      color: C.muted,
+      textTransform: 'uppercase',
+      letterSpacing: 0.6,
+    },
+    question: { fontSize: 20, fontFamily: MF.bold, color: C.ink, lineHeight: 28 },
+    questionSub: { fontSize: 13, fontFamily: MF.regular, color: C.muted, lineHeight: 20 },
 
-  optList: { gap: MS.sm, marginTop: MS.xs },
-  optBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: MS.sm,
-    backgroundColor: MC.bg,
-    borderWidth: 1.5,
-    borderColor: MC.line,
-    borderRadius: MR.lg,
-    paddingHorizontal: MS.md,
-    paddingVertical: 14,
-  },
-  optBtnActive: { borderColor: MC.emerald, backgroundColor: MC.emerald + '10' },
-  optBtnPressed: { opacity: 0.55 },
-  optLabelWrap: { flex: 1, gap: 2 },
-  optLabel: { fontSize: 15, fontFamily: MF.semiBold, color: MC.ink },
-  optLabelActive: { color: MC.emeraldDark },
-  optTag: { fontSize: 11, fontFamily: MF.medium, color: MC.emerald },
-  optIcon: { fontSize: 18 },
-  optChevron: { fontSize: 20, color: MC.muted },
-  optChevronActive: { color: MC.emerald },
+    optList: { gap: MS.sm, marginTop: MS.xs },
+    optBtn: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: MS.sm,
+      backgroundColor: C.bg,
+      borderWidth: 1.5,
+      borderColor: C.line,
+      borderRadius: MR.lg,
+      paddingHorizontal: MS.md,
+      paddingVertical: 14,
+    },
+    optBtnActive: { borderColor: C.emerald, backgroundColor: C.emerald + '10' },
+    optBtnPressed: { opacity: 0.55 },
+    optLabelWrap: { flex: 1, gap: 2 },
+    optLabel: { fontSize: 15, fontFamily: MF.semiBold, color: C.ink },
+    optLabelActive: { color: C.emeraldDark },
+    optTag: { fontSize: 11, fontFamily: MF.medium, color: C.emerald },
+    optIcon: { fontSize: 18 },
+    optChevron: { fontSize: 20, color: C.muted },
+    optChevronActive: { color: C.emerald },
 
-  summaryCard: {
-    backgroundColor: MC.card,
-    borderWidth: 1,
-    borderColor: MC.line,
-    borderRadius: MR.xl,
-    padding: MS.lg,
-    gap: MS.xs,
-  },
-  summaryTitle: {
-    fontSize: 11,
-    fontFamily: MF.bold,
-    color: MC.muted,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginBottom: MS.xs,
-  },
-  summaryRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: MS.sm,
-    borderTopWidth: 1,
-    borderTopColor: MC.line,
-  },
-  summaryKey: { fontSize: 13, fontFamily: MF.regular, color: MC.muted },
-  summaryVal: { fontSize: 13, fontFamily: MF.semiBold, color: MC.ink },
+    summaryCard: {
+      backgroundColor: C.card,
+      borderWidth: 1,
+      borderColor: C.line,
+      borderRadius: MR.xl,
+      padding: MS.lg,
+      gap: MS.xs,
+    },
+    summaryTitle: {
+      fontSize: 11,
+      fontFamily: MF.bold,
+      color: C.muted,
+      textTransform: 'uppercase',
+      letterSpacing: 0.5,
+      marginBottom: MS.xs,
+    },
+    summaryRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      paddingVertical: MS.sm,
+      borderTopWidth: 1,
+      borderTopColor: C.line,
+    },
+    summaryKey: { fontSize: 13, fontFamily: MF.regular, color: C.muted },
+    summaryVal: { fontSize: 13, fontFamily: MF.semiBold, color: C.ink },
 
-  // Loading
-  loadingCard: {
-    backgroundColor: MC.card,
-    borderWidth: 1,
-    borderColor: MC.line,
-    borderRadius: MR.xl,
-    padding: MS.xl,
-    alignItems: 'center',
-    gap: MS.md,
-  },
-  loadingText: { fontSize: 14, fontFamily: MF.medium, color: MC.muted },
+    loadingCard: {
+      backgroundColor: C.card,
+      borderWidth: 1,
+      borderColor: C.line,
+      borderRadius: MR.xl,
+      padding: MS.xl,
+      alignItems: 'center',
+      gap: MS.md,
+    },
+    loadingText: { fontSize: 14, fontFamily: MF.medium, color: C.muted },
 
-  // No API key
-  noKeyCard: {
-    backgroundColor: MC.card,
-    borderWidth: 1,
-    borderColor: MC.line,
-    borderRadius: MR.xl,
-    padding: MS.xl,
-    alignItems: 'center',
-    gap: MS.sm,
-  },
-  noKeyIcon: { fontSize: 32 },
-  noKeyTitle: { fontSize: 16, fontFamily: MF.bold, color: MC.ink },
-  noKeyMsg: {
-    fontSize: 13,
-    fontFamily: MF.regular,
-    color: MC.muted,
-    textAlign: 'center',
-    lineHeight: 21,
-  },
+    noKeyCard: {
+      backgroundColor: C.card,
+      borderWidth: 1,
+      borderColor: C.line,
+      borderRadius: MR.xl,
+      padding: MS.xl,
+      alignItems: 'center',
+      gap: MS.sm,
+    },
+    noKeyIcon: { fontSize: 32 },
+    noKeyTitle: { fontSize: 16, fontFamily: MF.bold, color: C.ink },
+    noKeyMsg: {
+      fontSize: 13,
+      fontFamily: MF.regular,
+      color: C.muted,
+      textAlign: 'center',
+      lineHeight: 21,
+    },
 
-  // Error
-  errorCard: {
-    backgroundColor: MC.card,
-    borderWidth: 1,
-    borderColor: MC.clay + '50',
-    borderRadius: MR.xl,
-    padding: MS.xl,
-    alignItems: 'center',
-    gap: MS.sm,
-  },
-  errorIcon: { fontSize: 32 },
-  errorTitle: { fontSize: 16, fontFamily: MF.bold, color: MC.ink },
-  errorMsg: {
-    fontSize: 13,
-    fontFamily: MF.regular,
-    color: MC.muted,
-    textAlign: 'center',
-    lineHeight: 20,
-  },
-  retryBtn: {
-    marginTop: MS.sm,
-    paddingVertical: MS.sm,
-    paddingHorizontal: MS.xl,
-    borderRadius: 999,
-    backgroundColor: MC.emerald,
-  },
-  retryTxt: { fontSize: 14, fontFamily: MF.semiBold, color: '#fff' },
+    errorCard: {
+      backgroundColor: C.card,
+      borderWidth: 1,
+      borderColor: C.clay + '50',
+      borderRadius: MR.xl,
+      padding: MS.xl,
+      alignItems: 'center',
+      gap: MS.sm,
+    },
+    errorIcon: { fontSize: 32 },
+    errorTitle: { fontSize: 16, fontFamily: MF.bold, color: C.ink },
+    errorMsg: {
+      fontSize: 13,
+      fontFamily: MF.regular,
+      color: C.muted,
+      textAlign: 'center',
+      lineHeight: 20,
+    },
+    retryBtn: {
+      marginTop: MS.sm,
+      paddingVertical: MS.sm,
+      paddingHorizontal: MS.xl,
+      borderRadius: 999,
+      backgroundColor: C.emerald,
+    },
+    retryTxt: { fontSize: 14, fontFamily: MF.semiBold, color: '#fff' },
 
-  // Pick step
-  pickTitle: {
-    fontSize: 15,
-    fontFamily: MF.semiBold,
-    color: MC.ink,
-    marginBottom: -MS.xs,
-  },
-  recBadge: {
-    alignSelf: 'flex-start',
-    backgroundColor: MC.emerald + '20',
-    borderWidth: 1,
-    borderColor: MC.emerald,
-    borderRadius: 999,
-    paddingHorizontal: MS.sm,
-    paddingVertical: 3,
-    marginBottom: MS.xs,
-  },
-  recBadgeText: {
-    fontSize: 10,
-    fontFamily: MF.bold,
-    color: MC.emeraldDark,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  optionCard: {
-    backgroundColor: MC.card,
-    borderWidth: 1.5,
-    borderColor: MC.line,
-    borderRadius: MR.xl,
-    padding: MS.lg,
-    gap: MS.sm,
-  },
-  optionCardRec: { borderColor: MC.emerald, borderWidth: 2 },
-  optionCardPressed: { opacity: 0.7, transform: [{ scale: 0.985 }] },
-  optionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  optionModelName: { fontSize: 22, fontFamily: MF.bold, color: MC.ink },
-  optionModelNameRec: { color: MC.emeraldDark },
-  optionChevron: { fontSize: 24, color: MC.muted },
-  optionSplit: { fontSize: 12, fontFamily: MF.medium, color: MC.muted, lineHeight: 18 },
-  optionDivider: { height: 1, backgroundColor: MC.line, marginVertical: MS.xs },
-  optionBestForLabel: {
-    fontSize: 10,
-    fontFamily: MF.bold,
-    color: MC.muted,
-    textTransform: 'uppercase',
-    letterSpacing: 0.6,
-  },
-  optionBestFor: { fontSize: 13, fontFamily: MF.semiBold, color: MC.ink },
-  optionWhy: { fontSize: 13, fontFamily: MF.regular, color: MC.muted, lineHeight: 20 },
+    pickTitle: {
+      fontSize: 15,
+      fontFamily: MF.semiBold,
+      color: C.ink,
+      marginBottom: -MS.xs,
+    },
+    recBadge: {
+      alignSelf: 'flex-start',
+      backgroundColor: C.emerald + '20',
+      borderWidth: 1,
+      borderColor: C.emerald,
+      borderRadius: 999,
+      paddingHorizontal: MS.sm,
+      paddingVertical: 3,
+      marginBottom: MS.xs,
+    },
+    recBadgeText: {
+      fontSize: 10,
+      fontFamily: MF.bold,
+      color: C.emeraldDark,
+      textTransform: 'uppercase',
+      letterSpacing: 0.5,
+    },
+    optionCard: {
+      backgroundColor: C.card,
+      borderWidth: 1.5,
+      borderColor: C.line,
+      borderRadius: MR.xl,
+      padding: MS.lg,
+      gap: MS.sm,
+    },
+    optionCardRec: { borderColor: C.emerald, borderWidth: 2 },
+    optionCardPressed: { opacity: 0.7, transform: [{ scale: 0.985 }] },
+    optionHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+    },
+    optionModelName: { fontSize: 22, fontFamily: MF.bold, color: C.ink },
+    optionModelNameRec: { color: C.emeraldDark },
+    optionChevron: { fontSize: 24, color: C.muted },
+    optionSplit: { fontSize: 12, fontFamily: MF.medium, color: C.muted, lineHeight: 18 },
+    optionDivider: { height: 1, backgroundColor: C.line, marginVertical: MS.xs },
+    optionBestForLabel: {
+      fontSize: 10,
+      fontFamily: MF.bold,
+      color: C.muted,
+      textTransform: 'uppercase',
+      letterSpacing: 0.6,
+    },
+    optionBestFor: { fontSize: 13, fontFamily: MF.semiBold, color: C.ink },
+    optionWhy: { fontSize: 13, fontFamily: MF.regular, color: C.muted, lineHeight: 20 },
 
-  // Chosen model confirmation
-  chosenCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: MS.md,
-    backgroundColor: MC.emerald + '15',
-    borderWidth: 1.5,
-    borderColor: MC.emerald,
-    borderRadius: MR.xl,
-    padding: MS.lg,
-  },
-  chosenCheck: { fontSize: 28, color: MC.emeraldDark },
-  chosenTextWrap: { flex: 1 },
-  chosenModel: { fontSize: 22, fontFamily: MF.bold, color: MC.emeraldDark },
-  chosenLabel: { fontSize: 12, fontFamily: MF.medium, color: MC.muted, marginTop: 2 },
+    chosenCard: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: MS.md,
+      backgroundColor: C.emerald + '15',
+      borderWidth: 1.5,
+      borderColor: C.emerald,
+      borderRadius: MR.xl,
+      padding: MS.lg,
+    },
+    chosenCheck: { fontSize: 28, color: C.emeraldDark },
+    chosenTextWrap: { flex: 1 },
+    chosenModel: { fontSize: 22, fontFamily: MF.bold, color: C.emeraldDark },
+    chosenLabel: { fontSize: 12, fontFamily: MF.medium, color: C.muted, marginTop: 2 },
 
-  // Placeholder
-  placeholderCard: {
-    backgroundColor: MC.card,
-    borderWidth: 1,
-    borderColor: MC.line,
-    borderRadius: MR.xl,
-    padding: MS.lg,
-    gap: MS.sm,
-  },
-  placeholderText: { fontSize: 14, fontFamily: MF.medium, color: MC.muted },
-  placeholderWhy: { fontSize: 13, fontFamily: MF.regular, color: MC.muted, lineHeight: 20 },
+    placeholderCard: {
+      backgroundColor: C.card,
+      borderWidth: 1,
+      borderColor: C.line,
+      borderRadius: MR.xl,
+      padding: MS.lg,
+      gap: MS.sm,
+    },
+    placeholderText: { fontSize: 14, fontFamily: MF.medium, color: C.muted },
+    placeholderWhy: { fontSize: 13, fontFamily: MF.regular, color: C.muted, lineHeight: 20 },
 
-  // Editable breakdown
-  editHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  sectionLabel: {
-    fontSize: 10,
-    fontFamily: MF.bold,
-    color: MC.muted,
-    textTransform: 'uppercase',
-    letterSpacing: 0.6,
-  },
-  saveBtn: {
-    backgroundColor: MC.emerald,
-    borderRadius: 999,
-    paddingHorizontal: MS.md,
-    paddingVertical: 6,
-  },
-  saveBtnTxt: { fontSize: 12, fontFamily: MF.semiBold, color: '#fff' },
+    editHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+    },
+    sectionLabel: {
+      fontSize: 10,
+      fontFamily: MF.bold,
+      color: C.muted,
+      textTransform: 'uppercase',
+      letterSpacing: 0.6,
+    },
+    saveBtn: {
+      backgroundColor: C.emerald,
+      borderRadius: 999,
+      paddingHorizontal: MS.md,
+      paddingVertical: 6,
+    },
+    saveBtnTxt: { fontSize: 12, fontFamily: MF.semiBold, color: '#fff' },
 
-  bucketRow: { gap: 6, paddingVertical: MS.md },
-  bucketRowBorder: { borderBottomWidth: 1, borderBottomColor: MC.line },
-  bucketLabel: { fontSize: 14, fontFamily: MF.semiBold, color: MC.ink },
-  bucketGuide: { fontSize: 11, fontFamily: MF.regular, color: MC.muted, lineHeight: 16 },
+    bucketRow: { gap: 6, paddingVertical: MS.md },
+    bucketRowBorder: { borderBottomWidth: 1, borderBottomColor: C.line },
+    bucketLabel: { fontSize: 14, fontFamily: MF.semiBold, color: C.ink },
+    bucketGuide: { fontSize: 11, fontFamily: MF.regular, color: C.muted, lineHeight: 16 },
 
-  splitRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: MS.sm,
-    marginTop: 2,
-  },
-  adjBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: MC.line,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  adjBtnTxt: { fontSize: 18, fontFamily: MF.bold, color: MC.ink, lineHeight: 22 },
-  pctDisplay: {
-    fontSize: 16,
-    fontFamily: MF.bold,
-    color: MC.ink,
-    minWidth: 44,
-    textAlign: 'center',
-  },
-  rmTarget: { fontSize: 13, fontFamily: MF.semiBold, color: MC.emeraldDark, marginLeft: MS.xs },
+    splitRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: MS.sm,
+      marginTop: 2,
+    },
+    adjBtn: {
+      width: 32,
+      height: 32,
+      borderRadius: 16,
+      backgroundColor: C.line,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    adjBtnTxt: { fontSize: 18, fontFamily: MF.bold, color: C.ink, lineHeight: 22 },
+    pctDisplay: {
+      fontSize: 16,
+      fontFamily: MF.bold,
+      color: C.ink,
+      minWidth: 44,
+      textAlign: 'center',
+    },
+    rmTarget: { fontSize: 13, fontFamily: MF.semiBold, color: C.emeraldDark, marginLeft: MS.xs },
 
-  meterBg: { height: 10, backgroundColor: MC.line, borderRadius: 6, overflow: 'hidden' },
-  meterFill: { height: '100%', borderRadius: 6 },
+    meterBg: { height: 10, backgroundColor: C.line, borderRadius: 6, overflow: 'hidden' },
+    meterFill: { height: '100%', borderRadius: 6 },
 
-  bucketNums: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  bucketNum: { fontSize: 12, fontFamily: MF.regular, color: MC.muted },
-  bucketStatus: { fontSize: 11, fontFamily: MF.medium },
+    bucketNums: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+    bucketNum: { fontSize: 12, fontFamily: MF.regular, color: C.muted },
+    bucketStatus: { fontSize: 11, fontFamily: MF.medium },
 
-  totalRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingTop: MS.sm,
-    borderTopWidth: 1,
-    borderTopColor: MC.line,
-    marginTop: MS.xs,
-  },
-  totalLabel: { fontSize: 12, fontFamily: MF.semiBold, color: MC.muted },
-  totalPct: { fontSize: 15, fontFamily: MF.bold, color: MC.emeraldDark },
-  totalPctWarn: { color: MC.clay },
+    totalRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      paddingTop: MS.sm,
+      borderTopWidth: 1,
+      borderTopColor: C.line,
+      marginTop: MS.xs,
+    },
+    totalLabel: { fontSize: 12, fontFamily: MF.semiBold, color: C.muted },
+    totalPct: { fontSize: 15, fontFamily: MF.bold, color: C.emeraldDark },
+    totalPctWarn: { color: C.clay },
 
-  warnRow: { gap: MS.sm },
-  warnText: { fontSize: 12, fontFamily: MF.regular, color: MC.clay },
-  normalizeBtn: {
-    alignSelf: 'flex-start',
-    borderWidth: 1,
-    borderColor: MC.clay,
-    borderRadius: 999,
-    paddingHorizontal: MS.md,
-    paddingVertical: 6,
-  },
-  normalizeTxt: { fontSize: 12, fontFamily: MF.semiBold, color: MC.clay },
+    warnRow: { gap: MS.sm },
+    warnText: { fontSize: 12, fontFamily: MF.regular, color: C.clay },
+    normalizeBtn: {
+      alignSelf: 'flex-start',
+      borderWidth: 1,
+      borderColor: C.clay,
+      borderRadius: 999,
+      paddingHorizontal: MS.md,
+      paddingVertical: 6,
+    },
+    normalizeTxt: { fontSize: 12, fontFamily: MF.semiBold, color: C.clay },
 
-  // Next action
-  actionCard: { backgroundColor: MC.goldLight, borderColor: MC.goldBorder, gap: MS.sm },
-  actionBadge: {
-    fontSize: 10,
-    fontFamily: MF.bold,
-    color: '#8A6D1E',
-    textTransform: 'uppercase',
-    letterSpacing: 0.6,
-  },
-  actionText: { fontSize: 15, fontFamily: MF.semiBold, color: MC.ink, lineHeight: 23 },
+    actionCard: { backgroundColor: C.goldLight, borderColor: C.goldBorder, gap: MS.sm },
+    actionBadge: {
+      fontSize: 10,
+      fontFamily: MF.bold,
+      color: C.goldText,
+      textTransform: 'uppercase',
+      letterSpacing: 0.6,
+    },
+    actionText: { fontSize: 15, fontFamily: MF.semiBold, color: C.ink, lineHeight: 23 },
 
-  // Encouragement
-  encourageCard: {
-    backgroundColor: MC.card,
-    borderWidth: 1,
-    borderColor: MC.line,
-    borderRadius: MR.xl,
-    padding: MS.lg,
-  },
-  encourageText: {
-    fontSize: 14,
-    fontFamily: MF.regular,
-    color: MC.muted,
-    lineHeight: 22,
-    fontStyle: 'italic',
-  },
+    encourageCard: {
+      backgroundColor: C.card,
+      borderWidth: 1,
+      borderColor: C.line,
+      borderRadius: MR.xl,
+      padding: MS.lg,
+    },
+    encourageText: {
+      fontSize: 14,
+      fontFamily: MF.regular,
+      color: C.muted,
+      lineHeight: 22,
+      fontStyle: 'italic',
+    },
 
-  disclaimer: {
-    fontSize: 11,
-    fontFamily: MF.regular,
-    color: MC.muted,
-    textAlign: 'center',
-    opacity: 0.65,
-    lineHeight: 17,
-    paddingHorizontal: MS.md,
-  },
+    disclaimer: {
+      fontSize: 11,
+      fontFamily: MF.regular,
+      color: C.muted,
+      textAlign: 'center',
+      opacity: 0.65,
+      lineHeight: 17,
+      paddingHorizontal: MS.md,
+    },
 
-  restartBtn: { alignSelf: 'center', paddingVertical: MS.sm, paddingHorizontal: MS.lg },
-  restartTxt: { fontSize: 13, fontFamily: MF.medium, color: MC.muted },
-});
+    restartBtn: { alignSelf: 'center', paddingVertical: MS.sm, paddingHorizontal: MS.lg },
+    restartTxt: { fontSize: 13, fontFamily: MF.medium, color: C.muted },
+  });
+}

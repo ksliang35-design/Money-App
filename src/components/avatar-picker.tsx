@@ -1,4 +1,5 @@
 import { LinearGradient } from 'expo-linear-gradient';
+import { useMemo } from 'react';
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -10,7 +11,9 @@ import {
   type AvatarConfig,
   type AvatarEmoji,
 } from '@/constants/avatar';
-import { MC, MF, MR, MS } from '@/constants/money-theme';
+import { MF, MR, MS } from '@/constants/money-theme';
+import { type AppTheme } from '@/constants/theme';
+import { useTheme } from '@/hooks/useTheme';
 import { useT } from '@/i18n';
 import { AvatarDisplay } from './avatar-display';
 
@@ -25,6 +28,8 @@ interface Props {
 export function AvatarPicker({ visible, current, initials, onChange, onClose }: Props) {
   const t = useT();
   const insets = useSafeAreaInsets();
+  const C = useTheme();
+  const styles = useMemo(() => makeStyles(C), [C]);
   const cfg = current ?? DEFAULT_AVATAR;
 
   const setColour = (colour: AvatarColour) => onChange({ ...cfg, colour });
@@ -124,116 +129,103 @@ export function AvatarPicker({ visible, current, initials, onChange, onClose }: 
   );
 }
 
-const styles = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    justifyContent: 'flex-end',
-    backgroundColor: 'rgba(0,0,0,0.35)',
-  },
-  sheet: {
-    backgroundColor: MC.card,
-    borderTopLeftRadius: MR.xxl,
-    borderTopRightRadius: MR.xxl,
-    paddingHorizontal: MS.lg,
-    paddingTop: MS.sm,
-    gap: MS.md,
-  },
-  handle: {
-    width: 36,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: MC.line,
-    alignSelf: 'center',
-    marginBottom: MS.xs,
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  headerTitle: { fontSize: 17, fontFamily: MF.bold, color: MC.ink },
-  closeBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: MC.line,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  closeTxt: { fontSize: 14, color: MC.muted, fontFamily: MF.medium },
+function makeStyles(C: AppTheme) {
+  return StyleSheet.create({
+    overlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: C.backdrop },
+    sheet: {
+      backgroundColor: C.card,
+      borderTopLeftRadius: MR.xxl,
+      borderTopRightRadius: MR.xxl,
+      paddingHorizontal: MS.lg,
+      paddingTop: MS.sm,
+      gap: MS.md,
+    },
+    handle: {
+      width: 36,
+      height: 4,
+      borderRadius: 2,
+      backgroundColor: C.line,
+      alignSelf: 'center',
+      marginBottom: MS.xs,
+    },
+    header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+    headerTitle: { fontSize: 17, fontFamily: MF.bold, color: C.ink },
+    closeBtn: {
+      width: 32,
+      height: 32,
+      borderRadius: 16,
+      backgroundColor: C.line,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    closeTxt: { fontSize: 14, color: C.muted, fontFamily: MF.medium },
 
-  sectionLabel: {
-    fontSize: 10,
-    fontFamily: MF.bold,
-    color: MC.muted,
-    textTransform: 'uppercase',
-    letterSpacing: 0.6,
-  },
+    sectionLabel: {
+      fontSize: 10,
+      fontFamily: MF.bold,
+      color: C.muted,
+      textTransform: 'uppercase',
+      letterSpacing: 0.6,
+    },
 
-  // Colour swatches
-  colourRow: { flexDirection: 'row', gap: MS.md },
-  swatchWrap: { alignItems: 'center', justifyContent: 'center' },
-  swatch: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  swatchActive: {
-    borderWidth: 3,
-    borderColor: '#fff',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-    elevation: 4,
-  },
-  swatchCheck: { fontSize: 16, color: '#fff', fontFamily: MF.bold },
+    colourRow: { flexDirection: 'row', gap: MS.md },
+    swatchWrap: { alignItems: 'center', justifyContent: 'center' },
+    swatch: {
+      width: 44,
+      height: 44,
+      borderRadius: 22,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    swatchActive: {
+      borderWidth: 3,
+      borderColor: '#fff',
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.25,
+      shadowRadius: 4,
+      elevation: 4,
+    },
+    swatchCheck: { fontSize: 16, color: '#fff', fontFamily: MF.bold },
 
-  // Initials row
-  initialsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: MS.md,
-    backgroundColor: MC.bg,
-    borderWidth: 1.5,
-    borderColor: MC.line,
-    borderRadius: MR.xl,
-    paddingHorizontal: MS.lg,
-    paddingVertical: MS.sm,
-  },
-  initialsRowActive: { borderColor: MC.emerald, backgroundColor: MC.emerald + '0D' },
-  initialsLabel: { flex: 1, fontSize: 15, fontFamily: MF.semiBold, color: MC.ink },
-  rowCheck: { fontSize: 16, color: MC.emerald, fontFamily: MF.bold },
+    initialsRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: MS.md,
+      backgroundColor: C.bg,
+      borderWidth: 1.5,
+      borderColor: C.line,
+      borderRadius: MR.xl,
+      paddingHorizontal: MS.lg,
+      paddingVertical: MS.sm,
+    },
+    initialsRowActive: { borderColor: C.emerald, backgroundColor: C.emerald + '0D' },
+    initialsLabel: { flex: 1, fontSize: 15, fontFamily: MF.semiBold, color: C.ink },
+    rowCheck: { fontSize: 16, color: C.emerald, fontFamily: MF.bold },
 
-  // Emoji grid — 3 columns
-  emojiGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: MS.sm,
-  },
-  emojiCell: {
-    width: '30%',
-    aspectRatio: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: MR.xl,
-    borderWidth: 1.5,
-    borderColor: MC.line,
-    backgroundColor: MC.bg,
-  },
-  emojiCellActive: { borderColor: MC.emerald, backgroundColor: MC.emerald + '0D' },
-  emojiCheckBadge: {
-    position: 'absolute',
-    top: 6,
-    right: 6,
-    width: 18,
-    height: 18,
-    borderRadius: 9,
-    backgroundColor: MC.emerald,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  emojiCheckTxt: { fontSize: 10, color: '#fff', fontFamily: MF.bold },
-});
+    emojiGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: MS.sm },
+    emojiCell: {
+      width: '30%',
+      aspectRatio: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderRadius: MR.xl,
+      borderWidth: 1.5,
+      borderColor: C.line,
+      backgroundColor: C.bg,
+    },
+    emojiCellActive: { borderColor: C.emerald, backgroundColor: C.emerald + '0D' },
+    emojiCheckBadge: {
+      position: 'absolute',
+      top: 6,
+      right: 6,
+      width: 18,
+      height: 18,
+      borderRadius: 9,
+      backgroundColor: C.emerald,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    emojiCheckTxt: { fontSize: 10, color: '#fff', fontFamily: MF.bold },
+  });
+}

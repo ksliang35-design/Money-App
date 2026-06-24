@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
   KeyboardAvoidingView,
   Modal,
@@ -12,7 +12,9 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { MC, MF, MR, MS } from '@/constants/money-theme';
+import { MF, MR, MS } from '@/constants/money-theme';
+import { type AppTheme } from '@/constants/theme';
+import { useTheme } from '@/hooks/useTheme';
 import { type Goal } from '@/constants/mock-data';
 import { useT } from '@/i18n';
 import { useAppData } from '@/store/AppDataProvider';
@@ -33,26 +35,28 @@ export function GoalEditModal({ mode, onClose }: Props) {
   const insets = useSafeAreaInsets();
   const { addGoal, updateGoal, deleteGoal } = useAppData();
   const t = useT();
+  const C = useTheme();
+  const styles = useMemo(() => makeStyles(C), [C]);
 
   const [label, setLabel] = useState('');
   const [target, setTarget] = useState('');
   const [saved, setSaved] = useState('');
   const [icon, setIcon] = useState('🎯');
-
-  useEffect(() => {
-    if (!mode) return;
-    if (mode.type === 'edit') {
+  const [initMode, setInitMode] = useState<typeof mode>(null);
+  if (mode !== initMode) {
+    setInitMode(mode);
+    if (mode?.type === 'edit') {
       setLabel(mode.goal.label);
       setTarget(String(mode.goal.target));
       setSaved(String(mode.goal.saved));
       setIcon(mode.goal.icon);
-    } else {
+    } else if (mode?.type === 'add') {
       setLabel('');
       setTarget('');
       setSaved('0');
       setIcon('🎯');
     }
-  }, [mode]);
+  }
 
   const parsedTarget = parseFloat(target);
   const parsedSaved  = parseFloat(saved);
@@ -107,7 +111,7 @@ export function GoalEditModal({ mode, onClose }: Props) {
               value={label}
               onChangeText={setLabel}
               placeholder={t('goalModal.placeholder')}
-              placeholderTextColor={MC.muted}
+              placeholderTextColor={C.muted}
               returnKeyType="next"
               autoFocus
             />
@@ -118,7 +122,7 @@ export function GoalEditModal({ mode, onClose }: Props) {
               value={target}
               onChangeText={setTarget}
               placeholder="0"
-              placeholderTextColor={MC.muted}
+              placeholderTextColor={C.muted}
               keyboardType="decimal-pad"
               returnKeyType="next"
             />
@@ -129,7 +133,7 @@ export function GoalEditModal({ mode, onClose }: Props) {
               value={saved}
               onChangeText={setSaved}
               placeholder="0"
-              placeholderTextColor={MC.muted}
+              placeholderTextColor={C.muted}
               keyboardType="decimal-pad"
               returnKeyType="done"
               onSubmitEditing={handleSave}
@@ -167,122 +171,68 @@ export function GoalEditModal({ mode, onClose }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    justifyContent: 'flex-end',
-  },
-  backdrop: {
-    position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
-    backgroundColor: 'rgba(0,0,0,0.4)',
-  },
-  sheet: {
-    backgroundColor: MC.bg,
-    borderTopLeftRadius: MR.xxl,
-    borderTopRightRadius: MR.xxl,
-    paddingHorizontal: MS.lg,
-    paddingTop: MS.md,
-    maxHeight: '85%',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.12,
-    shadowRadius: 16,
-    elevation: 12,
-  },
-  handle: {
-    width: 36,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: MC.line,
-    alignSelf: 'center',
-    marginBottom: MS.md,
-  },
-
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: MS.lg,
-  },
-  title: { fontSize: 18, fontFamily: MF.bold, color: MC.ink },
-  closeBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: MC.card,
-    borderWidth: 1,
-    borderColor: MC.line,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  closeGlyph: { fontSize: 13, color: MC.muted, fontFamily: MF.medium },
-
-  fieldLabel: {
-    fontSize: 11,
-    fontFamily: MF.semiBold,
-    color: MC.muted,
-    textTransform: 'uppercase',
-    letterSpacing: 0.6,
-    marginBottom: MS.xs,
-  },
-  input: {
-    backgroundColor: MC.card,
-    borderWidth: 1,
-    borderColor: MC.line,
-    borderRadius: MR.lg,
-    paddingHorizontal: MS.md,
-    paddingVertical: 12,
-    fontSize: 16,
-    fontFamily: MF.medium,
-    color: MC.ink,
-    marginBottom: MS.md,
-  },
-
-  iconGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: MS.sm,
-    marginBottom: MS.lg,
-  },
-  iconBtn: {
-    width: 48,
-    height: 48,
-    borderRadius: MR.md,
-    borderWidth: 1.5,
-    borderColor: MC.line,
-    backgroundColor: MC.card,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  iconBtnActive: {
-    borderColor: MC.emerald,
-    backgroundColor: MC.emerald + '18',
-  },
-  iconGlyph: { fontSize: 22 },
-
-  actions: {
-    flexDirection: 'row',
-    gap: MS.sm,
-    marginBottom: MS.sm,
-  },
-  deleteBtn: {
-    paddingVertical: 14,
-    paddingHorizontal: MS.lg,
-    borderRadius: MR.lg,
-    borderWidth: 1.5,
-    borderColor: MC.clay,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  deleteTxt: { fontSize: 14, fontFamily: MF.semiBold, color: MC.clay },
-  saveBtn: {
-    flex: 1,
-    paddingVertical: 14,
-    borderRadius: MR.lg,
-    backgroundColor: MC.emerald,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  saveBtnDisabled: { opacity: 0.4 },
-  saveTxt: { fontSize: 14, fontFamily: MF.bold, color: '#fff' },
-});
+function makeStyles(C: AppTheme) {
+  return StyleSheet.create({
+    overlay: { flex: 1, justifyContent: 'flex-end' },
+    backdrop: {
+      position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+      backgroundColor: C.backdrop,
+    },
+    sheet: {
+      backgroundColor: C.bg,
+      borderTopLeftRadius: MR.xxl,
+      borderTopRightRadius: MR.xxl,
+      paddingHorizontal: MS.lg,
+      paddingTop: MS.md,
+      maxHeight: '85%',
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: -4 },
+      shadowOpacity: 0.12,
+      shadowRadius: 16,
+      elevation: 12,
+    },
+    handle: {
+      width: 36, height: 4, borderRadius: 2,
+      backgroundColor: C.line, alignSelf: 'center', marginBottom: MS.md,
+    },
+    header: {
+      flexDirection: 'row', alignItems: 'center',
+      justifyContent: 'space-between', marginBottom: MS.lg,
+    },
+    title: { fontSize: 18, fontFamily: MF.bold, color: C.ink },
+    closeBtn: {
+      width: 32, height: 32, borderRadius: 16,
+      backgroundColor: C.card, borderWidth: 1, borderColor: C.line,
+      alignItems: 'center', justifyContent: 'center',
+    },
+    closeGlyph: { fontSize: 13, color: C.muted, fontFamily: MF.medium },
+    fieldLabel: {
+      fontSize: 11, fontFamily: MF.semiBold, color: C.muted,
+      textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: MS.xs,
+    },
+    input: {
+      backgroundColor: C.card, borderWidth: 1, borderColor: C.line,
+      borderRadius: MR.lg, paddingHorizontal: MS.md, paddingVertical: 12,
+      fontSize: 16, fontFamily: MF.medium, color: C.ink, marginBottom: MS.md,
+    },
+    iconGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: MS.sm, marginBottom: MS.lg },
+    iconBtn: {
+      width: 48, height: 48, borderRadius: MR.md, borderWidth: 1.5,
+      borderColor: C.line, backgroundColor: C.card, alignItems: 'center', justifyContent: 'center',
+    },
+    iconBtnActive: { borderColor: C.emerald, backgroundColor: C.emerald + '18' },
+    iconGlyph: { fontSize: 22 },
+    actions: { flexDirection: 'row', gap: MS.sm, marginBottom: MS.sm },
+    deleteBtn: {
+      paddingVertical: 14, paddingHorizontal: MS.lg, borderRadius: MR.lg,
+      borderWidth: 1.5, borderColor: C.clay, alignItems: 'center', justifyContent: 'center',
+    },
+    deleteTxt: { fontSize: 14, fontFamily: MF.semiBold, color: C.clay },
+    saveBtn: {
+      flex: 1, paddingVertical: 14, borderRadius: MR.lg,
+      backgroundColor: C.emerald, alignItems: 'center', justifyContent: 'center',
+    },
+    saveBtnDisabled: { opacity: 0.4 },
+    saveTxt: { fontSize: 14, fontFamily: MF.bold, color: '#fff' },
+  });
+}

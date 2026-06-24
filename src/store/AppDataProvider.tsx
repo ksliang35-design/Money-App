@@ -2,11 +2,13 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 
-import { MOCK, type Expense, type ExpenseCategory, type Goal, type Holding, type Income, type HistoryEntry, type Note } from '@/constants/mock-data';
+import { MOCK, type Expense, type ExpenseCategory, type Goal, type Holding, type Income, type HistoryEntry, type Note, type HoldingCurrency, type FxRates } from '@/constants/mock-data';
+import { FX_DEFAULTS, toRM, convertCcy } from '@/lib/fx';
 import type { CoachProfile, CoachPlan } from '@/lib/coach';
 import type { Language } from '@/i18n';
 import { getLogger } from '@/lib/logger';
 import type { AvatarConfig } from '@/constants/avatar';
+import { type ThemeMode } from '@/constants/theme';
 
 const log = getLogger('AppDataProvider');
 
@@ -28,6 +30,10 @@ export interface RawData {
   coachPlan: CoachPlan | null;
   language: Language | null;
   avatar: AvatarConfig | null;
+  displayCurrency: HoldingCurrency;
+  fxRates: FxRates;
+  pricesUpdatedAt: number | null;
+  themeMode: ThemeMode;
 }
 
 export interface DerivedData extends RawData {
@@ -40,7 +46,8 @@ export interface DerivedData extends RawData {
   sideShare: number;
   byMethod: { card: number; ewallet: number; cash: number; bank: number };
   byCategory: Record<ExpenseCategory, number>;
-  portfolioValue: number;
+  portfolioValue: number;        // RM-equivalent total (for home screen / backward compat)
+  portfolioValueDisplay: number; // total in the chosen display currency (for invest screen)
 }
 
 interface AppDataContextValue {
@@ -68,6 +75,10 @@ interface AppDataContextValue {
   clearCoachResult: () => void;
   setLanguage: (lang: Language) => void;
   setAvatar: (config: AvatarConfig) => void;
+  setDisplayCurrency: (ccy: HoldingCurrency) => void;
+  setFxRates: (rates: FxRates) => void;
+  setPricesUpdatedAt: (ts: number) => void;
+  setThemeMode: (mode: ThemeMode) => void;
 }
 
 const defaultRaw: RawData = {
@@ -83,6 +94,10 @@ const defaultRaw: RawData = {
   coachPlan: null,
   language: null,
   avatar: null,
+  displayCurrency: 'RM',
+  fxRates: FX_DEFAULTS,
+  pricesUpdatedAt: null,
+  themeMode: 'system',
 };
 
 function derive(raw: RawData): DerivedData {
@@ -107,8 +122,17 @@ function derive(raw: RawData): DerivedData {
   const byCategory = Object.fromEntries(
     ALL_CATS.map((c) => [c, raw.expenses.filter((e) => (e.category ?? 'other') === c).reduce((s, e) => s + e.amount, 0)]),
   ) as Record<ExpenseCategory, number>;
-  const portfolioValue = (raw.holdings ?? []).reduce((s, h) => s + h.currentValue, 0);
-  return { ...raw, income, salary, side, expense, net, savingsRate, sideShare, byMethod, byCategory, portfolioValue };
+  const rates = raw.fxRates ?? FX_DEFAULTS;
+  const displayCcy = raw.displayCurrency ?? 'RM';
+  const portfolioValue = (raw.holdings ?? []).reduce(
+    (s, h) => s + toRM(h.currentValue, h.currency ?? 'RM', rates),
+    0,
+  );
+  const portfolioValueDisplay = (raw.holdings ?? []).reduce(
+    (s, h) => s + convertCcy(h.currentValue, h.currency ?? 'RM', displayCcy, rates),
+    0,
+  );
+  return { ...raw, income, salary, side, expense, net, savingsRate, sideShare, byMethod, byCategory, portfolioValue, portfolioValueDisplay };
 }
 
 const AppDataContext = createContext<AppDataContextValue | null>(null);
@@ -236,7 +260,23 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       log.info('avatar set', config.type, config.colour);
       setRaw((r) => ({ ...r, avatar: config }));
     },
-  }), []); // eslint-disable-line react-hooks/exhaustive-deps
+    setDisplayCurrency: (ccy: HoldingCurrency) => {
+      log.info('displayCurrency set', ccy);
+      setRaw((r) => ({ ...r, displayCurrency: ccy }));
+    },
+    setFxRates: (rates: FxRates) => {
+      log.info('fxRates updated', rates);
+      setRaw((r) => ({ ...r, fxRates: rates }));
+    },
+    setPricesUpdatedAt: (ts: number) => {
+      log.info('pricesUpdatedAt set', ts);
+      setRaw((r) => ({ ...r, pricesUpdatedAt: ts }));
+    },
+    setThemeMode: (mode: ThemeMode) => {
+      log.info('themeMode set', mode);
+      setRaw((r) => ({ ...r, themeMode: mode }));
+    },
+  }), []);
 
   // Re-derive only when raw data or load state actually changes.
   // Prevents every context consumer from re-rendering on unrelated parent renders.

@@ -1,8 +1,11 @@
+import { useMemo } from 'react';
 import { useRouter } from 'expo-router';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { MC, MF, MR, MS, fmt } from '@/constants/money-theme';
+import { MF, MR, MS, fmt } from '@/constants/money-theme';
+import { type AppTheme } from '@/constants/theme';
+import { useTheme } from '@/hooks/useTheme';
 import { CATEGORY_STYLE, type ExpenseCategory } from '@/constants/mock-data';
 import { useT } from '@/i18n';
 import { useAppData } from '@/store/AppDataProvider';
@@ -12,6 +15,8 @@ export default function ReportsScreen() {
   const router = useRouter();
   const { data } = useAppData();
   const t = useT();
+  const C = useTheme();
+  const styles = useMemo(() => makeStyles(C), [C]);
 
   const catLabels: Record<ExpenseCategory, string> = {
     food:          t('expenses.categoryFood'),
@@ -25,10 +30,10 @@ export default function ReportsScreen() {
   };
 
   const methodMeta: Record<string, { icon: string; color: string; label: string }> = {
-    card:    { icon: '💳', color: MC.clay,    label: t('expenses.methodCard')    },
-    ewallet: { icon: '📱', color: MC.indigo,  label: t('expenses.methodEwallet') },
-    cash:    { icon: '💵', color: MC.emerald, label: t('expenses.methodCash')    },
-    bank:    { icon: '🏦', color: MC.gold,    label: t('expenses.methodBank')    },
+    card:    { icon: '💳', color: C.clay,    label: t('expenses.methodCard')    },
+    ewallet: { icon: '📱', color: C.indigo,  label: t('expenses.methodEwallet') },
+    cash:    { icon: '💵', color: C.emerald, label: t('expenses.methodCash')    },
+    bank:    { icon: '🏦', color: C.gold,    label: t('expenses.methodBank')    },
   };
 
   const ALL_CATS: ExpenseCategory[] = ['food', 'transport', 'shopping', 'bills', 'entertainment', 'health', 'education', 'other'];
@@ -70,20 +75,20 @@ export default function ReportsScreen() {
           <Text style={styles.cardTitle}>{t('reports.incomeExpense')}</Text>
           <View style={styles.summaryRow}>
             <View style={styles.summaryCol}>
-              <Text style={[styles.summaryLabel, { color: MC.emerald }]}>{t('reports.income')}</Text>
-              <Text style={[styles.summaryAmt, { color: MC.emerald }]}>{fmt(data.income)}</Text>
+              <Text style={[styles.summaryLabel, { color: C.emerald }]}>{t('reports.income')}</Text>
+              <Text style={[styles.summaryAmt, { color: C.emerald }]}>{fmt(data.income)}</Text>
             </View>
             <View style={styles.summaryDivider} />
             <View style={styles.summaryCol}>
-              <Text style={[styles.summaryLabel, { color: MC.clay }]}>{t('reports.expense')}</Text>
-              <Text style={[styles.summaryAmt, { color: MC.clay }]}>{fmt(data.expense)}</Text>
+              <Text style={[styles.summaryLabel, { color: C.clay }]}>{t('reports.expense')}</Text>
+              <Text style={[styles.summaryAmt, { color: C.clay }]}>{fmt(data.expense)}</Text>
             </View>
             <View style={styles.summaryDivider} />
             <View style={styles.summaryCol}>
-              <Text style={[styles.summaryLabel, { color: data.net >= 0 ? MC.gold : MC.clay }]}>
+              <Text style={[styles.summaryLabel, { color: data.net >= 0 ? C.gold : C.clay }]}>
                 {t('reports.net')}
               </Text>
-              <Text style={[styles.summaryAmt, { color: data.net >= 0 ? MC.gold : MC.clay }]}>
+              <Text style={[styles.summaryAmt, { color: data.net >= 0 ? C.gold : C.clay }]}>
                 {fmt(Math.abs(data.net))}
               </Text>
             </View>
@@ -165,10 +170,10 @@ export default function ReportsScreen() {
               const amtLabel = net >= 1000 ? `RM${Math.round(net / 1000)}k` : net > 0 ? `RM${Math.round(net)}` : '–';
               return (
                 <View key={h.month} style={styles.trendCol}>
-                  <Text style={[styles.trendAmt, isCurrent && { color: MC.gold }]}>
+                  <Text style={[styles.trendAmt, isCurrent && { color: C.gold }]}>
                     {amtLabel}
                   </Text>
-                  <View style={[styles.trendFill, { height: barH, backgroundColor: isCurrent ? MC.gold : MC.emerald }]} />
+                  <View style={[styles.trendFill, { height: barH, backgroundColor: isCurrent ? C.gold : C.emerald }]} />
                   <Text style={styles.trendLabel}>{h.month}</Text>
                 </View>
               );
@@ -183,74 +188,73 @@ export default function ReportsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: MC.bg },
+function makeStyles(C: AppTheme) {
+  return StyleSheet.create({
+    root: { flex: 1, backgroundColor: C.bg },
 
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: MS.lg,
-    paddingBottom: MS.md,
-    backgroundColor: MC.bg,
-    gap: MS.md,
-  },
-  backBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: MC.card,
-    borderWidth: 1,
-    borderColor: MC.line,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  backArrow: { fontSize: 22, color: MC.ink, lineHeight: 26 },
-  headerText: { flex: 1 },
-  title: { fontSize: 20, fontFamily: MF.bold, color: MC.ink },
-  subtitle: { fontSize: 12, fontFamily: MF.regular, color: MC.muted, marginTop: 2 },
+    header: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingHorizontal: MS.lg,
+      paddingBottom: MS.md,
+      backgroundColor: C.bg,
+      gap: MS.md,
+    },
+    backBtn: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      backgroundColor: C.card,
+      borderWidth: 1,
+      borderColor: C.line,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    backArrow: { fontSize: 22, color: C.ink, lineHeight: 26 },
+    headerText: { flex: 1 },
+    title: { fontSize: 20, fontFamily: MF.bold, color: C.ink },
+    subtitle: { fontSize: 12, fontFamily: MF.regular, color: C.muted, marginTop: 2 },
 
-  scroll: { flex: 1 },
-  content: { padding: MS.lg, gap: MS.md },
+    scroll: { flex: 1 },
+    content: { padding: MS.lg, gap: MS.md },
 
-  card: {
-    backgroundColor: MC.card,
-    borderWidth: 1,
-    borderColor: MC.line,
-    borderRadius: MR.xl,
-    padding: MS.lg,
-  },
-  cardTitle: { fontSize: 15, fontFamily: MF.bold, color: MC.ink, marginBottom: MS.md },
+    card: {
+      backgroundColor: C.card,
+      borderWidth: 1,
+      borderColor: C.line,
+      borderRadius: MR.xl,
+      padding: MS.lg,
+    },
+    cardTitle: { fontSize: 15, fontFamily: MF.bold, color: C.ink, marginBottom: MS.md },
 
-  // Income vs Expense summary
-  summaryRow: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: MS.md },
-  summaryCol: { flex: 1, alignItems: 'center' },
-  summaryLabel: { fontSize: 10, fontFamily: MF.medium, textTransform: 'uppercase', letterSpacing: 0.5 },
-  summaryAmt: { fontSize: 15, fontFamily: MF.bold, marginTop: 4 },
-  summaryDivider: { width: 1, height: 44, backgroundColor: MC.line, marginTop: 4 },
+    summaryRow: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: MS.md },
+    summaryCol: { flex: 1, alignItems: 'center' },
+    summaryLabel: { fontSize: 10, fontFamily: MF.medium, textTransform: 'uppercase', letterSpacing: 0.5 },
+    summaryAmt: { fontSize: 15, fontFamily: MF.bold, marginTop: 4 },
+    summaryDivider: { width: 1, height: 44, backgroundColor: C.line, marginTop: 4 },
 
-  meterBg: { height: 7, backgroundColor: MC.line, borderRadius: 4, overflow: 'hidden' },
-  meterFill: { height: '100%', borderRadius: 4, backgroundColor: MC.gold },
-  meterLabel: { fontSize: 11, fontFamily: MF.medium, color: MC.muted, marginTop: MS.xs, textAlign: 'right' },
+    meterBg: { height: 7, backgroundColor: C.line, borderRadius: 4, overflow: 'hidden' },
+    meterFill: { height: '100%', borderRadius: 4, backgroundColor: C.gold },
+    meterLabel: { fontSize: 11, fontFamily: MF.medium, color: C.muted, marginTop: MS.xs, textAlign: 'right' },
 
-  // Horizontal bar rows (category + method)
-  barRow: { flexDirection: 'row', alignItems: 'center', gap: MS.md, marginBottom: MS.md },
-  catIcon: { width: 36, height: 36, borderRadius: MR.md, alignItems: 'center', justifyContent: 'center' },
-  catIconText: { fontSize: 18 },
-  barBody: { flex: 1 },
-  barTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
-  barRowLabel: { fontSize: 13, fontFamily: MF.medium, color: MC.ink },
-  barRowAmt: { fontSize: 13, fontFamily: MF.bold, color: MC.ink },
-  barTrack: { height: 8, backgroundColor: MC.line, borderRadius: 4, overflow: 'hidden' },
-  barFill: { height: '100%', borderRadius: 4 },
-  barPct: { fontSize: 11, fontFamily: MF.regular, color: MC.muted, marginTop: 3 },
+    barRow: { flexDirection: 'row', alignItems: 'center', gap: MS.md, marginBottom: MS.md },
+    catIcon: { width: 36, height: 36, borderRadius: MR.md, alignItems: 'center', justifyContent: 'center' },
+    catIconText: { fontSize: 18 },
+    barBody: { flex: 1 },
+    barTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
+    barRowLabel: { fontSize: 13, fontFamily: MF.medium, color: C.ink },
+    barRowAmt: { fontSize: 13, fontFamily: MF.bold, color: C.ink },
+    barTrack: { height: 8, backgroundColor: C.line, borderRadius: 4, overflow: 'hidden' },
+    barFill: { height: '100%', borderRadius: 4 },
+    barPct: { fontSize: 11, fontFamily: MF.regular, color: C.muted, marginTop: 3 },
 
-  empty: { fontSize: 13, fontFamily: MF.regular, color: MC.muted, textAlign: 'center', paddingVertical: MS.md },
+    empty: { fontSize: 13, fontFamily: MF.regular, color: C.muted, textAlign: 'center', paddingVertical: MS.md },
 
-  // Savings trend vertical bars
-  trendBars: { flexDirection: 'row', alignItems: 'flex-end', gap: 8, height: 108 },
-  trendCol: { flex: 1, alignItems: 'center', justifyContent: 'flex-end', gap: 3 },
-  trendAmt: { fontSize: 9, fontFamily: MF.medium, color: MC.muted },
-  trendFill: { width: '80%', borderRadius: 5 },
-  trendLabel: { fontSize: 10, fontFamily: MF.medium, color: MC.muted },
-  trendHint: { fontSize: 11, fontFamily: MF.regular, color: MC.muted, marginTop: MS.sm },
-});
+    trendBars: { flexDirection: 'row', alignItems: 'flex-end', gap: 8, height: 108 },
+    trendCol: { flex: 1, alignItems: 'center', justifyContent: 'flex-end', gap: 3 },
+    trendAmt: { fontSize: 9, fontFamily: MF.medium, color: C.muted },
+    trendFill: { width: '80%', borderRadius: 5 },
+    trendLabel: { fontSize: 10, fontFamily: MF.medium, color: C.muted },
+    trendHint: { fontSize: 11, fontFamily: MF.regular, color: C.muted, marginTop: MS.sm },
+  });
+}

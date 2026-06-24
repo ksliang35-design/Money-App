@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
   KeyboardAvoidingView,
   Modal,
@@ -12,7 +12,9 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { MC, MF, MR, MS } from '@/constants/money-theme';
+import { MF, MR, MS } from '@/constants/money-theme';
+import { type AppTheme } from '@/constants/theme';
+import { useTheme } from '@/hooks/useTheme';
 import { type Expense, type ExpenseCategory, CATEGORY_STYLE } from '@/constants/mock-data';
 import { useT } from '@/i18n';
 import { useAppData } from '@/store/AppDataProvider';
@@ -23,13 +25,6 @@ export type ExpenseModalMode =
   | { type: 'edit'; expense: Expense }
   | { type: 'add' }
   | null;
-
-const METHOD_ICONS: Record<Method, { icon: string; color: string }> = {
-  card:    { icon: '💳', color: MC.clay    },
-  ewallet: { icon: '📱', color: MC.indigo  },
-  cash:    { icon: '💵', color: MC.emerald },
-  bank:    { icon: '🏦', color: MC.gold    },
-};
 
 const ALL_CATEGORIES: ExpenseCategory[] = [
   'food', 'transport', 'shopping', 'bills',
@@ -45,12 +40,14 @@ export function ExpenseEditModal({ mode, onClose }: Props) {
   const insets = useSafeAreaInsets();
   const { addExpense, updateExpense, deleteExpense } = useAppData();
   const t = useT();
+  const C = useTheme();
+  const styles = useMemo(() => makeStyles(C), [C]);
 
   const METHOD_META: Record<Method, { label: string; icon: string; color: string }> = {
-    card:    { label: t('expenseModal.methodCard'),    ...METHOD_ICONS.card    },
-    ewallet: { label: t('expenseModal.methodEwallet'), ...METHOD_ICONS.ewallet },
-    cash:    { label: t('expenseModal.methodCash'),    ...METHOD_ICONS.cash    },
-    bank:    { label: t('expenseModal.methodBank'),    ...METHOD_ICONS.bank    },
+    card:    { label: t('expenseModal.methodCard'),    icon: '💳', color: C.clay    },
+    ewallet: { label: t('expenseModal.methodEwallet'), icon: '📱', color: C.indigo  },
+    cash:    { label: t('expenseModal.methodCash'),    icon: '💵', color: C.emerald },
+    bank:    { label: t('expenseModal.methodBank'),    icon: '🏦', color: C.gold    },
   };
 
   const CATEGORY_LABELS: Record<ExpenseCategory, string> = {
@@ -68,21 +65,21 @@ export function ExpenseEditModal({ mode, onClose }: Props) {
   const [amount, setAmount] = useState('');
   const [method, setMethod] = useState<Method>('card');
   const [category, setCategory] = useState<ExpenseCategory>('other');
-
-  useEffect(() => {
-    if (!mode) return;
-    if (mode.type === 'edit') {
+  const [initMode, setInitMode] = useState<typeof mode>(null);
+  if (mode !== initMode) {
+    setInitMode(mode);
+    if (mode?.type === 'edit') {
       setLabel(mode.expense.label);
       setAmount(String(mode.expense.amount));
       setMethod(mode.expense.method as Method);
       setCategory(mode.expense.category ?? 'other');
-    } else {
+    } else if (mode?.type === 'add') {
       setLabel('');
       setAmount('');
       setMethod('card');
       setCategory('other');
     }
-  }, [mode]);
+  }
 
   const parsed = parseFloat(amount);
   const isValid = label.trim().length > 0 && !isNaN(parsed) && parsed > 0;
@@ -135,7 +132,7 @@ export function ExpenseEditModal({ mode, onClose }: Props) {
             value={label}
             onChangeText={setLabel}
             placeholder={t('expenseModal.placeholder')}
-            placeholderTextColor={MC.muted}
+            placeholderTextColor={C.muted}
             returnKeyType="next"
             autoFocus
           />
@@ -146,7 +143,7 @@ export function ExpenseEditModal({ mode, onClose }: Props) {
             value={amount}
             onChangeText={setAmount}
             placeholder="0"
-            placeholderTextColor={MC.muted}
+            placeholderTextColor={C.muted}
             keyboardType="decimal-pad"
             returnKeyType="done"
             onSubmitEditing={handleSave}
@@ -238,137 +235,77 @@ export function ExpenseEditModal({ mode, onClose }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    justifyContent: 'flex-end',
-  },
-  backdrop: {
-    position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
-    backgroundColor: 'rgba(0,0,0,0.4)',
-  },
-  sheetScroll: {
-    maxHeight: '90%',
-  },
-  sheet: {
-    backgroundColor: MC.bg,
-    borderTopLeftRadius: MR.xxl,
-    borderTopRightRadius: MR.xxl,
-    paddingHorizontal: MS.lg,
-    paddingTop: MS.md,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.12,
-    shadowRadius: 16,
-    elevation: 12,
-  },
-  handle: {
-    width: 36,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: MC.line,
-    alignSelf: 'center',
-    marginBottom: MS.md,
-  },
-
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: MS.lg,
-  },
-  title: { fontSize: 18, fontFamily: MF.bold, color: MC.ink },
-  closeBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: MC.card,
-    borderWidth: 1,
-    borderColor: MC.line,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  closeGlyph: { fontSize: 13, color: MC.muted, fontFamily: MF.medium },
-
-  fieldLabel: {
-    fontSize: 11,
-    fontFamily: MF.semiBold,
-    color: MC.muted,
-    textTransform: 'uppercase',
-    letterSpacing: 0.6,
-    marginBottom: MS.xs,
-  },
-  input: {
-    backgroundColor: MC.card,
-    borderWidth: 1,
-    borderColor: MC.line,
-    borderRadius: MR.lg,
-    paddingHorizontal: MS.md,
-    paddingVertical: 12,
-    fontSize: 16,
-    fontFamily: MF.medium,
-    color: MC.ink,
-    marginBottom: MS.md,
-  },
-
-  methodRow: {
-    flexDirection: 'row',
-    gap: MS.sm,
-    marginBottom: MS.lg,
-  },
-  methodBtn: {
-    flex: 1,
-    alignItems: 'center',
-    paddingVertical: MS.sm,
-    borderRadius: MR.md,
-    borderWidth: 1.5,
-    borderColor: MC.line,
-    backgroundColor: MC.card,
-    gap: 3,
-  },
-  methodIcon: { fontSize: 18 },
-  methodLabel: { fontSize: 10, fontFamily: MF.medium, color: MC.muted },
-
-  catRow: {
-    flexDirection: 'row',
-    gap: MS.sm,
-    marginBottom: MS.sm,
-  },
-  catBtn: {
-    flex: 1,
-    alignItems: 'center',
-    paddingVertical: MS.sm,
-    borderRadius: MR.md,
-    borderWidth: 1.5,
-    borderColor: MC.line,
-    backgroundColor: MC.card,
-    gap: 2,
-  },
-  catIcon: { fontSize: 16 },
-  catLabel: { fontSize: 8.5, fontFamily: MF.medium, color: MC.muted, textAlign: 'center' },
-
-  actions: {
-    flexDirection: 'row',
-    gap: MS.sm,
-  },
-  deleteBtn: {
-    paddingVertical: 14,
-    paddingHorizontal: MS.lg,
-    borderRadius: MR.lg,
-    borderWidth: 1.5,
-    borderColor: MC.clay,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  deleteTxt: { fontSize: 14, fontFamily: MF.semiBold, color: MC.clay },
-  saveBtn: {
-    flex: 1,
-    paddingVertical: 14,
-    borderRadius: MR.lg,
-    backgroundColor: MC.emerald,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  saveBtnDisabled: { opacity: 0.4 },
-  saveTxt: { fontSize: 14, fontFamily: MF.bold, color: '#fff' },
-});
+function makeStyles(C: AppTheme) {
+  return StyleSheet.create({
+    overlay: { flex: 1, justifyContent: 'flex-end' },
+    backdrop: {
+      position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+      backgroundColor: C.backdrop,
+    },
+    sheetScroll: { maxHeight: '90%' },
+    sheet: {
+      backgroundColor: C.bg,
+      borderTopLeftRadius: MR.xxl,
+      borderTopRightRadius: MR.xxl,
+      paddingHorizontal: MS.lg,
+      paddingTop: MS.md,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: -4 },
+      shadowOpacity: 0.12,
+      shadowRadius: 16,
+      elevation: 12,
+    },
+    handle: {
+      width: 36, height: 4, borderRadius: 2,
+      backgroundColor: C.line, alignSelf: 'center', marginBottom: MS.md,
+    },
+    header: {
+      flexDirection: 'row', alignItems: 'center',
+      justifyContent: 'space-between', marginBottom: MS.lg,
+    },
+    title: { fontSize: 18, fontFamily: MF.bold, color: C.ink },
+    closeBtn: {
+      width: 32, height: 32, borderRadius: 16,
+      backgroundColor: C.card, borderWidth: 1, borderColor: C.line,
+      alignItems: 'center', justifyContent: 'center',
+    },
+    closeGlyph: { fontSize: 13, color: C.muted, fontFamily: MF.medium },
+    fieldLabel: {
+      fontSize: 11, fontFamily: MF.semiBold, color: C.muted,
+      textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: MS.xs,
+    },
+    input: {
+      backgroundColor: C.card, borderWidth: 1, borderColor: C.line,
+      borderRadius: MR.lg, paddingHorizontal: MS.md, paddingVertical: 12,
+      fontSize: 16, fontFamily: MF.medium, color: C.ink, marginBottom: MS.md,
+    },
+    methodRow: { flexDirection: 'row', gap: MS.sm, marginBottom: MS.lg },
+    methodBtn: {
+      flex: 1, alignItems: 'center', paddingVertical: MS.sm,
+      borderRadius: MR.md, borderWidth: 1.5, borderColor: C.line,
+      backgroundColor: C.card, gap: 3,
+    },
+    methodIcon: { fontSize: 18 },
+    methodLabel: { fontSize: 10, fontFamily: MF.medium, color: C.muted },
+    catRow: { flexDirection: 'row', gap: MS.sm, marginBottom: MS.sm },
+    catBtn: {
+      flex: 1, alignItems: 'center', paddingVertical: MS.sm,
+      borderRadius: MR.md, borderWidth: 1.5, borderColor: C.line,
+      backgroundColor: C.card, gap: 2,
+    },
+    catIcon: { fontSize: 16 },
+    catLabel: { fontSize: 8.5, fontFamily: MF.medium, color: C.muted, textAlign: 'center' },
+    actions: { flexDirection: 'row', gap: MS.sm },
+    deleteBtn: {
+      paddingVertical: 14, paddingHorizontal: MS.lg, borderRadius: MR.lg,
+      borderWidth: 1.5, borderColor: C.clay, alignItems: 'center', justifyContent: 'center',
+    },
+    deleteTxt: { fontSize: 14, fontFamily: MF.semiBold, color: C.clay },
+    saveBtn: {
+      flex: 1, paddingVertical: 14, borderRadius: MR.lg,
+      backgroundColor: C.emerald, alignItems: 'center', justifyContent: 'center',
+    },
+    saveBtnDisabled: { opacity: 0.4 },
+    saveTxt: { fontSize: 14, fontFamily: MF.bold, color: '#fff' },
+  });
+}

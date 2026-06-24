@@ -1,3 +1,6 @@
+import { getLogger } from '@/lib/logger';
+import { callGemini, extractJSON } from '@/lib/gemini';
+
 export interface CoachProfile {
   age: string;
   incomeBracket: string;
@@ -39,9 +42,6 @@ export interface ModelOptions {
   recommended: string;
   options: ModelOption[];
 }
-
-import { getLogger } from '@/lib/logger';
-import { callGemini, extractJSON } from '@/lib/gemini';
 
 const log = getLogger('coach');
 
@@ -163,7 +163,7 @@ export async function getAIReply(
   name: string,
   financials: CoachFinancials,
   goalsText: string,
-  history: Array<{ role: 'user' | 'ai'; text: string }>,
+  history: { role: 'user' | 'ai'; text: string }[],
 ): Promise<AIReply> {
   log.info('getAIReply start', `history=${history.length} turns`);
 

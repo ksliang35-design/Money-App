@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -14,7 +14,9 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ExpenseEditModal, type ExpenseModalMode } from '@/components/expense-edit-modal';
-import { MC, MF, MR, MS, fmt } from '@/constants/money-theme';
+import { MF, MR, MS, fmt } from '@/constants/money-theme';
+import { type AppTheme } from '@/constants/theme';
+import { useTheme } from '@/hooks/useTheme';
 import { type Expense, type ExpenseCategory, CATEGORY_STYLE } from '@/constants/mock-data';
 import { parseExpense, type ParsedExpense } from '@/lib/quickadd';
 import { useT } from '@/i18n';
@@ -34,12 +36,15 @@ export default function ExpensesScreen() {
   const [modalMode, setModalMode] = useState<ExpenseModalMode>(null);
   const { data, addExpense } = useAppData();
   const t = useT();
+  const C = useTheme();
+  const styles = useMemo(() => makeStyles(C), [C]);
+  const qa = useMemo(() => makeQaStyles(C), [C]);
 
   const METHODS: Record<string, { label: string; icon: string; color: string }> = {
-    card: { label: t('expenses.methodCard'), icon: '💳', color: MC.clay },
-    ewallet: { label: t('expenses.methodEwallet'), icon: '📱', color: MC.indigo },
-    cash: { label: t('expenses.methodCash'), icon: '💵', color: MC.emerald },
-    bank: { label: t('expenses.methodBank'), icon: '🏦', color: MC.gold },
+    card: { label: t('expenses.methodCard'), icon: '💳', color: C.clay },
+    ewallet: { label: t('expenses.methodEwallet'), icon: '📱', color: C.indigo },
+    cash: { label: t('expenses.methodCash'), icon: '💵', color: C.emerald },
+    bank: { label: t('expenses.methodBank'), icon: '🏦', color: C.gold },
   };
 
   const FILTER_OPTIONS: { key: Method; label: string }[] = [
@@ -66,7 +71,6 @@ export default function ExpensesScreen() {
     .filter((x) => x.amt > 0)
     .sort((a, b) => b.amt - a.amt);
 
-  // Quick Add state
   const [quickOpen, setQuickOpen] = useState(false);
   const [qaText, setQaText] = useState('');
   const [qaLoading, setQaLoading] = useState(false);
@@ -144,7 +148,7 @@ export default function ExpensesScreen() {
           <Text style={styles.summaryAmt}>{fmt(data.expense)}</Text>
         </View>
 
-        {/* By method grid — each card is a tappable filter toggle */}
+        {/* By method grid */}
         <View style={styles.methGrid}>
           {Object.entries(METHODS).map(([key, m]) => {
             const active = filter === key;
@@ -222,7 +226,7 @@ export default function ExpensesScreen() {
                   pressed && styles.expRowPressed,
                 ]}
                 onPress={() => setModalMode({ type: 'edit', expense: e })}>
-                <View style={[styles.expBar, { backgroundColor: m?.color ?? MC.muted }]} />
+                <View style={[styles.expBar, { backgroundColor: m?.color ?? C.muted }]} />
                 <Text style={styles.expIcon}>{m?.icon ?? '•'}</Text>
                 <View style={styles.expMid}>
                   <Text style={styles.expLabel}>{e.label}</Text>
@@ -238,7 +242,7 @@ export default function ExpensesScreen() {
                     );
                   })()}
                   <View style={styles.expMeterBg}>
-                    <View style={[styles.expMeterFill, { width: `${pct}%`, backgroundColor: m?.color ?? MC.muted }]} />
+                    <View style={[styles.expMeterFill, { width: `${pct}%`, backgroundColor: m?.color ?? C.muted }]} />
                   </View>
                 </View>
                 <Text style={styles.expAmt}>{fmt(e.amount)}</Text>
@@ -299,7 +303,7 @@ export default function ExpensesScreen() {
               value={qaText}
               onChangeText={(t) => { setQaText(t); setQaResult(null); setQaError(null); }}
               placeholder={t('expenses.qaPlaceholder')}
-              placeholderTextColor={MC.muted}
+              placeholderTextColor={C.muted}
               multiline
               numberOfLines={3}
               autoFocus
@@ -382,290 +386,294 @@ export default function ExpensesScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: MC.bg },
-  scroll: { flex: 1 },
-  content: { padding: MS.lg, gap: MS.md },
+function makeStyles(C: AppTheme) {
+  return StyleSheet.create({
+    root: { flex: 1, backgroundColor: C.bg },
+    scroll: { flex: 1 },
+    content: { padding: MS.lg, gap: MS.md },
 
-  headerRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  screenTitle: { fontSize: 26, fontFamily: MF.bold, color: MC.ink },
-  screenSub: { fontSize: 13, fontFamily: MF.regular, color: MC.muted, marginTop: 2 },
-  headerBtns: { flexDirection: 'row', gap: MS.sm, alignItems: 'center' },
-  quickAddBtn: {
-    paddingHorizontal: MS.md,
-    paddingVertical: MS.sm,
-    borderRadius: 999,
-    backgroundColor: MC.card,
-    borderWidth: 1.5,
-    borderColor: MC.emerald,
-  },
-  quickAddBtnText: { fontSize: 12, fontFamily: MF.semiBold, color: MC.emeraldDark },
-  addBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: MC.emerald,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: MC.emerald,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.35,
-    shadowRadius: 8,
-    elevation: 5,
-  },
-  addBtnText: { fontSize: 24, color: '#fff', lineHeight: 28, fontFamily: MF.regular },
+    headerRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+    },
+    screenTitle: { fontSize: 26, fontFamily: MF.bold, color: C.ink },
+    screenSub: { fontSize: 13, fontFamily: MF.regular, color: C.muted, marginTop: 2 },
+    headerBtns: { flexDirection: 'row', gap: MS.sm, alignItems: 'center' },
+    quickAddBtn: {
+      paddingHorizontal: MS.md,
+      paddingVertical: MS.sm,
+      borderRadius: 999,
+      backgroundColor: C.card,
+      borderWidth: 1.5,
+      borderColor: C.emerald,
+    },
+    quickAddBtnText: { fontSize: 12, fontFamily: MF.semiBold, color: C.emeraldDark },
+    addBtn: {
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      backgroundColor: C.emerald,
+      alignItems: 'center',
+      justifyContent: 'center',
+      shadowColor: C.emerald,
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.35,
+      shadowRadius: 8,
+      elevation: 5,
+    },
+    addBtnText: { fontSize: 24, color: '#fff', lineHeight: 28, fontFamily: MF.regular },
 
-  summaryBanner: {
-    backgroundColor: MC.card,
-    borderWidth: 1,
-    borderColor: MC.line,
-    borderRadius: MR.xl,
-    paddingHorizontal: MS.lg,
-    paddingVertical: MS.md,
-  },
-  summaryLabel: {
-    fontSize: 11,
-    fontFamily: MF.semiBold,
-    color: MC.muted,
-    textTransform: 'uppercase',
-    letterSpacing: 0.6,
-    marginBottom: 4,
-  },
-  summaryAmt: {
-    fontSize: 34,
-    fontFamily: MF.bold,
-    color: MC.ink,
-    lineHeight: 40,
-  },
+    summaryBanner: {
+      backgroundColor: C.card,
+      borderWidth: 1,
+      borderColor: C.line,
+      borderRadius: MR.xl,
+      paddingHorizontal: MS.lg,
+      paddingVertical: MS.md,
+    },
+    summaryLabel: {
+      fontSize: 11,
+      fontFamily: MF.semiBold,
+      color: C.muted,
+      textTransform: 'uppercase',
+      letterSpacing: 0.6,
+      marginBottom: 4,
+    },
+    summaryAmt: {
+      fontSize: 34,
+      fontFamily: MF.bold,
+      color: C.ink,
+      lineHeight: 40,
+    },
 
-  methGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: MS.sm },
-  methCard: {
-    flex: 1,
-    minWidth: '45%',
-    backgroundColor: MC.card,
-    borderWidth: 1,
-    borderColor: MC.line,
-    borderLeftWidth: 4,
-    borderRadius: MR.md,
-    padding: MS.md,
-    gap: 3,
-  },
-  methCardPressed: { opacity: 0.7, transform: [{ scale: 0.96 }] },
-  methLabel: { fontSize: 11, fontFamily: MF.medium, color: MC.muted },
-  methAmt: { fontSize: 16, fontFamily: MF.bold, color: MC.ink },
-  methActiveHint: { fontSize: 9.5, fontFamily: MF.semiBold, marginTop: 1 },
+    methGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: MS.sm },
+    methCard: {
+      flex: 1,
+      minWidth: '45%',
+      backgroundColor: C.card,
+      borderWidth: 1,
+      borderColor: C.line,
+      borderLeftWidth: 4,
+      borderRadius: MR.md,
+      padding: MS.md,
+      gap: 3,
+    },
+    methCardPressed: { opacity: 0.7, transform: [{ scale: 0.96 }] },
+    methLabel: { fontSize: 11, fontFamily: MF.medium, color: C.muted },
+    methAmt: { fontSize: 16, fontFamily: MF.bold, color: C.ink },
+    methActiveHint: { fontSize: 9.5, fontFamily: MF.semiBold, marginTop: 1 },
 
-  filterScroll: { flexShrink: 0 },
-  filterContent: { gap: MS.sm, paddingVertical: 2 },
-  chip: {
-    paddingHorizontal: MS.md,
-    paddingVertical: MS.sm,
-    borderRadius: 999,
-    backgroundColor: MC.card,
-    borderWidth: 1,
-    borderColor: MC.line,
-  },
-  chipActive: { backgroundColor: MC.emerald, borderColor: MC.emerald },
-  chipText: { fontSize: 12.5, fontFamily: MF.semiBold, color: MC.ink },
-  chipTextActive: { color: '#fff' },
+    filterScroll: { flexShrink: 0 },
+    filterContent: { gap: MS.sm, paddingVertical: 2 },
+    chip: {
+      paddingHorizontal: MS.md,
+      paddingVertical: MS.sm,
+      borderRadius: 999,
+      backgroundColor: C.card,
+      borderWidth: 1,
+      borderColor: C.line,
+    },
+    chipActive: { backgroundColor: C.emerald, borderColor: C.emerald },
+    chipText: { fontSize: 12.5, fontFamily: MF.semiBold, color: C.ink },
+    chipTextActive: { color: '#fff' },
 
-  card: {
-    backgroundColor: MC.card,
-    borderWidth: 1,
-    borderColor: MC.line,
-    borderRadius: MR.xl,
-    padding: MS.lg,
-  },
-  cardTitle: { fontSize: 15, fontFamily: MF.bold, color: MC.ink, marginBottom: MS.md },
+    card: {
+      backgroundColor: C.card,
+      borderWidth: 1,
+      borderColor: C.line,
+      borderRadius: MR.xl,
+      padding: MS.lg,
+    },
+    cardTitle: { fontSize: 15, fontFamily: MF.bold, color: C.ink, marginBottom: MS.md },
 
-  expRow: { flexDirection: 'row', alignItems: 'center', gap: MS.sm, paddingVertical: MS.sm },
-  expRowBorder: { borderBottomWidth: 1, borderBottomColor: MC.line },
-  expRowPressed: { opacity: 0.6 },
-  expEditArrow: { fontSize: 18, color: MC.muted, marginLeft: 2 },
-  expBar: { width: 4, alignSelf: 'stretch', borderRadius: 3 },
-  expIcon: { fontSize: 16, width: 24, textAlign: 'center' },
-  expMid: { flex: 1 },
-  expLabel: { fontSize: 14, fontFamily: MF.medium, color: MC.ink },
-  expMeterBg: { height: 3, backgroundColor: MC.line, borderRadius: 2, marginTop: 4, overflow: 'hidden' },
-  expMeterFill: { height: '100%', borderRadius: 2 },
-  expAmt: { fontSize: 14, fontFamily: MF.bold, color: MC.ink },
+    expRow: { flexDirection: 'row', alignItems: 'center', gap: MS.sm, paddingVertical: MS.sm },
+    expRowBorder: { borderBottomWidth: 1, borderBottomColor: C.line },
+    expRowPressed: { opacity: 0.6 },
+    expEditArrow: { fontSize: 18, color: C.muted, marginLeft: 2 },
+    expBar: { width: 4, alignSelf: 'stretch', borderRadius: 3 },
+    expIcon: { fontSize: 16, width: 24, textAlign: 'center' },
+    expMid: { flex: 1 },
+    expLabel: { fontSize: 14, fontFamily: MF.medium, color: C.ink },
+    expMeterBg: { height: 3, backgroundColor: C.line, borderRadius: 2, marginTop: 4, overflow: 'hidden' },
+    expMeterFill: { height: '100%', borderRadius: 2 },
+    expAmt: { fontSize: 14, fontFamily: MF.bold, color: C.ink },
 
-  emptyText: { fontSize: 13, fontFamily: MF.regular, color: MC.muted, textAlign: 'center', paddingVertical: MS.lg },
+    emptyText: { fontSize: 13, fontFamily: MF.regular, color: C.muted, textAlign: 'center', paddingVertical: MS.lg },
 
-  expCatTag: {
-    alignSelf: 'flex-start',
-    borderRadius: 4,
-    paddingHorizontal: 5,
-    paddingVertical: 1,
-    marginTop: 2,
-    marginBottom: 3,
-  },
-  expCatText: { fontSize: 9.5, fontFamily: MF.medium },
+    expCatTag: {
+      alignSelf: 'flex-start',
+      borderRadius: 4,
+      paddingHorizontal: 5,
+      paddingVertical: 1,
+      marginTop: 2,
+      marginBottom: 3,
+    },
+    expCatText: { fontSize: 9.5, fontFamily: MF.medium },
 
-  sectionLabel: {
-    fontSize: 11,
-    fontFamily: MF.semiBold,
-    color: MC.muted,
-    textTransform: 'uppercase',
-    letterSpacing: 0.6,
-    marginBottom: MS.sm,
-  },
-  catScroll: { gap: MS.sm, paddingBottom: 2 },
-  catCard: {
-    width: 108,
-    backgroundColor: MC.card,
-    borderWidth: 1,
-    borderColor: MC.line,
-    borderLeftWidth: 3,
-    borderRadius: MR.md,
-    padding: MS.md,
-    gap: 2,
-  },
-  catCardIcon: { fontSize: 18 },
-  catCardName: { fontSize: 10, fontFamily: MF.medium, color: MC.muted },
-  catCardAmt: { fontSize: 15, fontFamily: MF.bold },
+    sectionLabel: {
+      fontSize: 11,
+      fontFamily: MF.semiBold,
+      color: C.muted,
+      textTransform: 'uppercase',
+      letterSpacing: 0.6,
+      marginBottom: MS.sm,
+    },
+    catScroll: { gap: MS.sm, paddingBottom: 2 },
+    catCard: {
+      width: 108,
+      backgroundColor: C.card,
+      borderWidth: 1,
+      borderColor: C.line,
+      borderLeftWidth: 3,
+      borderRadius: MR.md,
+      padding: MS.md,
+      gap: 2,
+    },
+    catCardIcon: { fontSize: 18 },
+    catCardName: { fontSize: 10, fontFamily: MF.medium, color: C.muted },
+    catCardAmt: { fontSize: 15, fontFamily: MF.bold },
 
-  totalRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    backgroundColor: MC.card,
-    borderWidth: 1,
-    borderColor: MC.line,
-    borderRadius: MR.lg,
-    padding: MS.lg,
-  },
-  totalLabel: { fontSize: 14, fontFamily: MF.medium, color: MC.muted },
-  totalAmt: { fontSize: 20, fontFamily: MF.bold, color: MC.ink },
-});
+    totalRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      backgroundColor: C.card,
+      borderWidth: 1,
+      borderColor: C.line,
+      borderRadius: MR.lg,
+      padding: MS.lg,
+    },
+    totalLabel: { fontSize: 14, fontFamily: MF.medium, color: C.muted },
+    totalAmt: { fontSize: 20, fontFamily: MF.bold, color: C.ink },
+  });
+}
 
-const qa = StyleSheet.create({
-  overlay: { flex: 1, justifyContent: 'flex-end' },
-  backdrop: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.4)' },
-  sheet: {
-    backgroundColor: MC.bg,
-    borderTopLeftRadius: MR.xxl,
-    borderTopRightRadius: MR.xxl,
-    paddingHorizontal: MS.lg,
-    paddingTop: MS.md,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.12,
-    shadowRadius: 16,
-    elevation: 12,
-  },
-  handle: {
-    width: 36,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: MC.line,
-    alignSelf: 'center',
-    marginBottom: MS.md,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-    marginBottom: MS.lg,
-  },
-  title: { fontSize: 18, fontFamily: MF.bold, color: MC.ink },
-  subtitle: { fontSize: 12, fontFamily: MF.regular, color: MC.muted, marginTop: 2 },
-  closeBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: MC.card,
-    borderWidth: 1,
-    borderColor: MC.line,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  closeGlyph: { fontSize: 13, color: MC.muted, fontFamily: MF.medium },
-  input: {
-    backgroundColor: MC.card,
-    borderWidth: 1,
-    borderColor: MC.line,
-    borderRadius: MR.lg,
-    paddingHorizontal: MS.md,
-    paddingVertical: MS.md,
-    fontSize: 14,
-    fontFamily: MF.regular,
-    color: MC.ink,
-    minHeight: 72,
-    textAlignVertical: 'top',
-    marginBottom: MS.md,
-  },
-  parseBtn: {
-    paddingVertical: 13,
-    borderRadius: MR.lg,
-    backgroundColor: MC.emerald,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: MS.md,
-  },
-  parseBtnDisabled: { opacity: 0.4 },
-  parseBtnText: { fontSize: 14, fontFamily: MF.bold, color: '#fff' },
-  infoCard: {
-    flexDirection: 'row',
-    gap: MS.sm,
-    backgroundColor: MC.card,
-    borderWidth: 1,
-    borderColor: MC.line,
-    borderRadius: MR.lg,
-    padding: MS.md,
-    marginBottom: MS.md,
-    alignItems: 'flex-start',
-  },
-  infoIcon: { fontSize: 18 },
-  infoText: { flex: 1, fontSize: 13, fontFamily: MF.regular, color: MC.muted, lineHeight: 19 },
-  confirmCard: {
-    backgroundColor: MC.card,
-    borderWidth: 1,
-    borderColor: MC.line,
-    borderRadius: MR.xl,
-    padding: MS.lg,
-    gap: MS.md,
-    marginBottom: MS.sm,
-  },
-  confirmRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-  },
-  confirmLeft: { flex: 1, marginRight: MS.md },
-  confirmLabel: { fontSize: 16, fontFamily: MF.bold, color: MC.ink },
-  confirmCategory: { fontSize: 12, fontFamily: MF.regular, color: MC.muted, marginTop: 2 },
-  confirmAmount: { fontSize: 22, fontFamily: MF.bold, color: MC.emeraldDark },
-  methodLabel: {
-    fontSize: 11,
-    fontFamily: MF.semiBold,
-    color: MC.muted,
-    textTransform: 'uppercase',
-    letterSpacing: 0.6,
-  },
-  methodRow: { flexDirection: 'row', gap: MS.sm },
-  methodBtn: {
-    flex: 1,
-    alignItems: 'center',
-    paddingVertical: MS.sm,
-    borderRadius: MR.md,
-    borderWidth: 1.5,
-    borderColor: MC.line,
-    backgroundColor: MC.bg,
-    gap: 3,
-  },
-  methodIcon: { fontSize: 16 },
-  methodBtnLabel: { fontSize: 9, fontFamily: MF.medium, color: MC.muted },
-  confirmBtn: {
-    paddingVertical: 13,
-    borderRadius: MR.lg,
-    backgroundColor: MC.emerald,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  confirmBtnText: { fontSize: 14, fontFamily: MF.bold, color: '#fff' },
-});
+function makeQaStyles(C: AppTheme) {
+  return StyleSheet.create({
+    overlay: { flex: 1, justifyContent: 'flex-end' },
+    backdrop: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: C.backdrop },
+    sheet: {
+      backgroundColor: C.bg,
+      borderTopLeftRadius: MR.xxl,
+      borderTopRightRadius: MR.xxl,
+      paddingHorizontal: MS.lg,
+      paddingTop: MS.md,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: -4 },
+      shadowOpacity: 0.12,
+      shadowRadius: 16,
+      elevation: 12,
+    },
+    handle: {
+      width: 36,
+      height: 4,
+      borderRadius: 2,
+      backgroundColor: C.line,
+      alignSelf: 'center',
+      marginBottom: MS.md,
+    },
+    header: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      justifyContent: 'space-between',
+      marginBottom: MS.lg,
+    },
+    title: { fontSize: 18, fontFamily: MF.bold, color: C.ink },
+    subtitle: { fontSize: 12, fontFamily: MF.regular, color: C.muted, marginTop: 2 },
+    closeBtn: {
+      width: 32,
+      height: 32,
+      borderRadius: 16,
+      backgroundColor: C.card,
+      borderWidth: 1,
+      borderColor: C.line,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    closeGlyph: { fontSize: 13, color: C.muted, fontFamily: MF.medium },
+    input: {
+      backgroundColor: C.card,
+      borderWidth: 1,
+      borderColor: C.line,
+      borderRadius: MR.lg,
+      paddingHorizontal: MS.md,
+      paddingVertical: MS.md,
+      fontSize: 14,
+      fontFamily: MF.regular,
+      color: C.ink,
+      minHeight: 72,
+      textAlignVertical: 'top',
+      marginBottom: MS.md,
+    },
+    parseBtn: {
+      paddingVertical: 13,
+      borderRadius: MR.lg,
+      backgroundColor: C.emerald,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginBottom: MS.md,
+    },
+    parseBtnDisabled: { opacity: 0.4 },
+    parseBtnText: { fontSize: 14, fontFamily: MF.bold, color: '#fff' },
+    infoCard: {
+      flexDirection: 'row',
+      gap: MS.sm,
+      backgroundColor: C.card,
+      borderWidth: 1,
+      borderColor: C.line,
+      borderRadius: MR.lg,
+      padding: MS.md,
+      marginBottom: MS.md,
+      alignItems: 'flex-start',
+    },
+    infoIcon: { fontSize: 18 },
+    infoText: { flex: 1, fontSize: 13, fontFamily: MF.regular, color: C.muted, lineHeight: 19 },
+    confirmCard: {
+      backgroundColor: C.card,
+      borderWidth: 1,
+      borderColor: C.line,
+      borderRadius: MR.xl,
+      padding: MS.lg,
+      gap: MS.md,
+      marginBottom: MS.sm,
+    },
+    confirmRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'flex-start',
+    },
+    confirmLeft: { flex: 1, marginRight: MS.md },
+    confirmLabel: { fontSize: 16, fontFamily: MF.bold, color: C.ink },
+    confirmCategory: { fontSize: 12, fontFamily: MF.regular, color: C.muted, marginTop: 2 },
+    confirmAmount: { fontSize: 22, fontFamily: MF.bold, color: C.emeraldDark },
+    methodLabel: {
+      fontSize: 11,
+      fontFamily: MF.semiBold,
+      color: C.muted,
+      textTransform: 'uppercase',
+      letterSpacing: 0.6,
+    },
+    methodRow: { flexDirection: 'row', gap: MS.sm },
+    methodBtn: {
+      flex: 1,
+      alignItems: 'center',
+      paddingVertical: MS.sm,
+      borderRadius: MR.md,
+      borderWidth: 1.5,
+      borderColor: C.line,
+      backgroundColor: C.bg,
+      gap: 3,
+    },
+    methodIcon: { fontSize: 16 },
+    methodBtnLabel: { fontSize: 9, fontFamily: MF.medium, color: C.muted },
+    confirmBtn: {
+      paddingVertical: 13,
+      borderRadius: MR.lg,
+      backgroundColor: C.emerald,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    confirmBtnText: { fontSize: 14, fontFamily: MF.bold, color: '#fff' },
+  });
+}
