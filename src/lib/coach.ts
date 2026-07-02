@@ -1,3 +1,5 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
 import { COACH_SYSTEM_PROMPT } from '@/constants/coach-prompt';
 import { getLogger } from '@/lib/logger';
 import { callGemini, callGeminiWithTools, extractJSON } from '@/lib/gemini';
@@ -88,6 +90,30 @@ export function computeActualRM(
   });
 }
 
+// ── Active Money Wisdom habits (context for prompts) ───────────────────────────
+
+const ACTIVE_HABITS_STORAGE_KEY = 'money-wisdom-active-habits';
+
+interface ActiveHabitContext {
+  title: string;
+  steps: string[];
+}
+
+async function loadActiveHabitsPromptContext(): Promise<string> {
+  try {
+    const json = await AsyncStorage.getItem(ACTIVE_HABITS_STORAGE_KEY);
+    if (!json) return '';
+    const habits = JSON.parse(json) as ActiveHabitContext[];
+    if (!Array.isArray(habits) || habits.length === 0) return '';
+    const habitsList = habits
+      .map((h) => `${h.title} (${h.steps.join('; ')})`)
+      .join(' | ');
+    return `\n\nThe user is following these money habits: ${habitsList}. Reference them when relevant in your advice.`;
+  } catch {
+    return '';
+  }
+}
+
 // ── Agentic coach ─────────────────────────────────────────────────────────────
 
 export interface AgenticFinancials extends CoachFinancials {
@@ -126,12 +152,13 @@ export async function getAgenticCoachPlan(
 ): Promise<CoachPlan> {
   log.info('getAgenticCoachPlan start', `lang=${language}`);
   const langName = LANG_NAMES[language] ?? 'English';
+  const habitsContext = await loadActiveHabitsPromptContext();
 
   const systemText = `${COACH_SYSTEM_PROMPT}
 
 IMPORTANT — You have tools to examine this user's actual financial data before deciding on a model. You MUST call get_expense_breakdown and get_monthly_history before returning the plan. Optionally call get_goals_progress and get_upcoming_bills for extra context. This ensures the plan is grounded in real spending patterns, not just self-reported estimates.
 
-Write the "why", "nextAction", and "encouragement" fields in: ${langName}`;
+Write the "why", "nextAction", and "encouragement" fields in: ${langName}${habitsContext}`;
 
   const userMessage = `My profile:
 - Age range: ${profile.age}
@@ -196,6 +223,8 @@ export async function getCoachPlan(
     ? `IMPORTANT: The user has already chosen the "${chosenModel}" model. You MUST use exactly "${chosenModel}" as the model value in your JSON — do not choose a different one. Generate the full bucket breakdown, nextAction, and encouragement for "${chosenModel}".`
     : 'Give me a personalised budgeting plan.';
 
+  const habitsContext = await loadActiveHabitsPromptContext();
+
   const fullPrompt = `${COACH_SYSTEM_PROMPT}
 
 My financial profile:
@@ -208,7 +237,7 @@ This month's numbers:
 - Total expenses: RM ${financials.expense.toLocaleString('en-MY')}
 - Net savings: RM ${financials.net.toLocaleString('en-MY')}
 - Savings rate: ${financials.savingsRate}%
-- Spending by method: Card RM ${financials.byMethod.card.toLocaleString('en-MY')}, E-wallet RM ${financials.byMethod.ewallet.toLocaleString('en-MY')}, Cash RM ${financials.byMethod.cash.toLocaleString('en-MY')}, Bank transfer RM ${financials.byMethod.bank.toLocaleString('en-MY')}${categoryLine}
+- Spending by method: Card RM ${financials.byMethod.card.toLocaleString('en-MY')}, E-wallet RM ${financials.byMethod.ewallet.toLocaleString('en-MY')}, Cash RM ${financials.byMethod.cash.toLocaleString('en-MY')}, Bank transfer RM ${financials.byMethod.bank.toLocaleString('en-MY')}${categoryLine}${habitsContext}
 
 ${instruction}`;
 
