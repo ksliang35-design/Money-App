@@ -1,3 +1,4 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -72,6 +73,7 @@ const BUCKET_GUIDE_KEY: Record<string, string> = {
 };
 
 interface MoneyWisdomCard {
+  id: string;
   icon: string;
   title: string;
   source: string;
@@ -80,8 +82,17 @@ interface MoneyWisdomCard {
   steps: string[];
 }
 
+interface ActiveHabit {
+  id: string;
+  title: string;
+  steps: string[];
+}
+
+const HABITS_STORAGE_KEY = 'money-wisdom-active-habits';
+
 const MONEY_WISDOM_CARDS: MoneyWisdomCard[] = [
   {
+    id: 'behavior-beats-math',
     icon: '🧠',
     title: 'Behavior beats math',
     source: 'The Psychology of Money — Morgan Housel',
@@ -96,6 +107,7 @@ const MONEY_WISDOM_CARDS: MoneyWisdomCard[] = [
     ],
   },
   {
+    id: 'keep-investing-simple',
     icon: '📊',
     title: 'Keep investing simple',
     source: 'The Simple Path to Wealth — JL Collins',
@@ -110,6 +122,7 @@ const MONEY_WISDOM_CARDS: MoneyWisdomCard[] = [
     ],
   },
   {
+    id: 'money-is-life-energy',
     icon: '⏳',
     title: 'Money is life energy',
     source: 'Your Money or Your Life — Vicki Robin',
@@ -155,6 +168,7 @@ export default function CoachScreen() {
   const [chatAdvisor, setChatAdvisor] = useState<Advisor | null>(null);
   const [advisors, setAdvisors] = useState<Advisor[]>([]);
   const [advisorsLoading, setAdvisorsLoading] = useState(true);
+  const [activeHabits, setActiveHabits] = useState<ActiveHabit[]>([]);
 
   useEffect(() => {
     const unsub = subscribeToAdvisors((list) => {
@@ -163,6 +177,24 @@ export default function CoachScreen() {
     });
     return unsub;
   }, []);
+
+  useEffect(() => {
+    AsyncStorage.getItem(HABITS_STORAGE_KEY).then((json) => {
+      if (json) setActiveHabits(JSON.parse(json) as ActiveHabit[]);
+    });
+  }, []);
+
+  const startHabit = (card: MoneyWisdomCard) => {
+    const next = [...activeHabits, { id: card.id, title: card.title, steps: card.steps }];
+    setActiveHabits(next);
+    AsyncStorage.setItem(HABITS_STORAGE_KEY, JSON.stringify(next));
+  };
+
+  const removeHabit = (id: string) => {
+    const next = activeHabits.filter((h) => h.id !== id);
+    setActiveHabits(next);
+    AsyncStorage.setItem(HABITS_STORAGE_KEY, JSON.stringify(next));
+  };
 
   const suggestedBracket = incomeToBracket(data.income);
 
@@ -776,34 +808,66 @@ export default function CoachScreen() {
           <Text style={styles.wisdomSub}>Bite-sized lessons from personal finance books</Text>
         </View>
 
-        {MONEY_WISDOM_CARDS.map((card) => (
-          <Card key={card.title} gap={MS.sm}>
-            <View style={styles.wisdomCardHeader}>
-              <Text style={styles.wisdomIcon}>{card.icon}</Text>
-              <View style={styles.wisdomTitleWrap}>
-                <Text style={styles.wisdomCardTitle}>{card.title}</Text>
-                <Text style={styles.wisdomSource}>{card.source}</Text>
+        {activeHabits.length > 0 && (
+          <View style={styles.habitsCard}>
+            <Text style={styles.habitsTitle}>My Active Habits</Text>
+            {activeHabits.map((habit) => (
+              <View key={habit.id} style={styles.habitRow}>
+                <Text style={styles.habitRowText} numberOfLines={1}>{habit.title}</Text>
+                <Pressable
+                  onPress={() => removeHabit(habit.id)}
+                  style={({ pressed }) => [styles.habitRemoveBtn, pressed && { opacity: 0.6 }]}>
+                  <Text style={styles.habitRemoveTxt}>✗</Text>
+                </Pressable>
               </View>
-            </View>
+            ))}
+          </View>
+        )}
 
-            <Text style={styles.wisdomSummary}>{card.summary}</Text>
-
-            <View style={styles.wisdomGoalBox}>
-              <Text style={styles.wisdomGoalLabel}>Goal</Text>
-              <Text style={styles.wisdomGoalText}>{card.goal}</Text>
-            </View>
-
-            <View style={styles.wisdomStepsWrap}>
-              <Text style={styles.wisdomStepsLabel}>Action Steps</Text>
-              {card.steps.map((step, i) => (
-                <View key={i} style={styles.wisdomStepRow}>
-                  <Text style={styles.wisdomStepNum}>{i + 1}</Text>
-                  <Text style={styles.wisdomStepText}>{step}</Text>
+        {MONEY_WISDOM_CARDS.map((card) => {
+          const isFollowing = activeHabits.some((h) => h.id === card.id);
+          return (
+            <Card key={card.id} gap={MS.sm}>
+              <View style={styles.wisdomCardHeader}>
+                <Text style={styles.wisdomIcon}>{card.icon}</Text>
+                <View style={styles.wisdomTitleWrap}>
+                  <Text style={styles.wisdomCardTitle}>{card.title}</Text>
+                  <Text style={styles.wisdomSource}>{card.source}</Text>
                 </View>
-              ))}
-            </View>
-          </Card>
-        ))}
+              </View>
+
+              <Text style={styles.wisdomSummary}>{card.summary}</Text>
+
+              <View style={styles.wisdomGoalBox}>
+                <Text style={styles.wisdomGoalLabel}>Goal</Text>
+                <Text style={styles.wisdomGoalText}>{card.goal}</Text>
+              </View>
+
+              <View style={styles.wisdomStepsWrap}>
+                <Text style={styles.wisdomStepsLabel}>Action Steps</Text>
+                {card.steps.map((step, i) => (
+                  <View key={i} style={styles.wisdomStepRow}>
+                    <Text style={styles.wisdomStepNum}>{i + 1}</Text>
+                    <Text style={styles.wisdomStepText}>{step}</Text>
+                  </View>
+                ))}
+              </View>
+
+              <Pressable
+                disabled={isFollowing}
+                onPress={() => startHabit(card)}
+                style={({ pressed }) => [
+                  styles.startHabitBtn,
+                  isFollowing && styles.startHabitBtnActive,
+                  pressed && !isFollowing && { opacity: 0.7 },
+                ]}>
+                <Text style={[styles.startHabitTxt, isFollowing && styles.startHabitTxtActive]}>
+                  {isFollowing ? '✓ Following' : 'Start this habit'}
+                </Text>
+              </Pressable>
+            </Card>
+          );
+        })}
 
         <View style={{ height: MS.xxl }} />
       </ScrollView>
@@ -1293,5 +1357,55 @@ function makeStyles(C: AppTheme) {
       overflow: 'hidden',
     },
     wisdomStepText: { flex: 1, fontSize: 13, fontFamily: MF.regular, color: C.ink, lineHeight: 19 },
+
+    startHabitBtn: {
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingVertical: 12,
+      borderRadius: MR.lg,
+      backgroundColor: C.emerald,
+    },
+    startHabitBtnActive: {
+      backgroundColor: C.emerald + '15',
+      borderWidth: 1.5,
+      borderColor: C.emerald,
+    },
+    startHabitTxt: { fontSize: 14, fontFamily: MF.semiBold, color: '#fff' },
+    startHabitTxtActive: { color: C.emeraldDark },
+
+    habitsCard: {
+      backgroundColor: C.card,
+      borderWidth: 1,
+      borderColor: C.line,
+      borderRadius: MR.xl,
+      padding: MS.lg,
+      gap: MS.xs,
+    },
+    habitsTitle: {
+      fontSize: 11,
+      fontFamily: MF.bold,
+      color: C.muted,
+      textTransform: 'uppercase',
+      letterSpacing: 0.5,
+      marginBottom: MS.xs,
+    },
+    habitRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      paddingVertical: MS.sm,
+      borderTopWidth: 1,
+      borderTopColor: C.line,
+    },
+    habitRowText: { flex: 1, fontSize: 13, fontFamily: MF.semiBold, color: C.ink, marginRight: MS.sm },
+    habitRemoveBtn: {
+      width: 24,
+      height: 24,
+      borderRadius: 12,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: C.line,
+    },
+    habitRemoveTxt: { fontSize: 12, fontFamily: MF.bold, color: C.muted },
   });
 }
