@@ -1,5 +1,6 @@
+import { COACH_SYSTEM_PROMPT } from '@/constants/coach-prompt';
 import { getLogger } from '@/lib/logger';
-import { callGemini, extractJSON } from '@/lib/gemini';
+import { callGemini, callGeminiWithTools, extractJSON } from '@/lib/gemini';
 
 export interface CoachProfile {
   age: string;
@@ -51,56 +52,127 @@ const LANG_NAMES: Record<string, string> = {
   zh: 'Simplified Chinese (中文)',
 };
 
-const SYSTEM_PROMPT = `You are a careful, friendly money coach for users in Malaysia. All amounts are in Malaysian Ringgit (RM). You give general guidance only — you are NOT a licensed financial advisor. Never recommend specific stocks, crypto, or investment products.
+// ── Live expense sync ─────────────────────────────────────────────────────────
 
-Choose the single best-fit budgeting model for this person from:
-- "50/30/20": 50% Needs, 30% Wants, 20% Savings — best all-rounder for most people
-- "80/20": 80% Living, 20% Savings — simple, suits lower-to-mid incomes or debt-clearing goals
-- "70/20/10": 70% Living, 20% Savings, 10% Debt/Giving — good when debt repayment or giving is a priority
-- "30/30/40": 30% Housing, 30% Lifestyle, 40% Savings+Investments — suits higher earners building wealth
-- "60/20/20": 60% Needs, 20% Wants, 20% Savings — for high cost-of-living areas (KL/PJ) where rent alone exceeds 40% of income; more realistic than 50/30/20 for city renters
-- "75/15/10": 75% Living, 15% Savings, 10% Giving — for those with charitable obligations: zakat, tithe, or regular family giving
-- "Debt-Clearance": 50% Living, 30% Debt Repayment, 20% Emergency Buffer — best when actively clearing significant debt (PTPTN, car loan, credit card)
-- "JARS": 55% Necessities, 10% Long-term Savings, 10% Education, 10% Play, 10% Financial Freedom, 5% Give — intentional 6-bucket system for holistic wealth-building; choose when user wants clear purpose for every ringgit
-- "Reverse Budget": Pay yourself first — Save First (you set the %), Fixed Commitments, Discretionary; choose for disciplined savers who want one savings target enforced and don't want to micro-manage every category
+const BUCKET_ACTUAL_TYPE: Record<string, 'needs' | 'wants' | 'savings' | 'education' | 'zero'> = {
+  Needs: 'needs', Necessities: 'needs', Living: 'needs', 'Fixed Commitments': 'needs', Housing: 'needs',
+  Wants: 'wants', Play: 'wants', Discretionary: 'wants', Lifestyle: 'wants',
+  Savings: 'savings', 'Save First': 'savings', 'Emergency Buffer': 'savings',
+  'Financial Freedom': 'savings', 'Long-term Savings': 'savings', 'Savings & Investments': 'savings',
+  Education: 'education',
+  Giving: 'zero', Give: 'zero', 'Debt & Giving': 'zero', 'Debt Repayment': 'zero',
+};
 
-Return ONLY valid JSON — no markdown fences, no text outside the JSON object:
+export function computeActualRM(
+  buckets: BudgetBucket[],
+  byCategory: Record<string, number>,
+  net: number,
+): BudgetBucket[] {
+  const needsAmt = ['food', 'transport', 'bills', 'health', 'other']
+    .reduce((s, c) => s + (byCategory[c] ?? 0), 0);
+  const wantsAmt = ['shopping', 'entertainment']
+    .reduce((s, c) => s + (byCategory[c] ?? 0), 0);
+  const eduAmt = byCategory.education ?? 0;
+  const savingsAmt = Math.max(0, net);
+  // Only map a single savings bucket to avoid double-counting (e.g. JARS has multiple)
+  const singleSavings = buckets.filter((b) => BUCKET_ACTUAL_TYPE[b.label] === 'savings').length === 1;
 
-{
-  "model": "50/30/20",
-  "why": "1–2 simple sentences explaining why this model fits this specific person's age, goal, and income level.",
-  "buckets": [
-    {"label": "Needs", "targetRM": 3050, "actualRM": 2800},
-    {"label": "Wants", "targetRM": 1830, "actualRM": 1250},
-    {"label": "Savings", "targetRM": 1220, "actualRM": 1050}
-  ],
-  "nextAction": "One clear, specific action they can take this week — concrete and immediately actionable.",
-  "encouragement": "One warm, honest sentence that acknowledges where they are and motivates them."
+  return buckets.map((b) => {
+    const type = BUCKET_ACTUAL_TYPE[b.label];
+    if (type === 'needs') return { ...b, actualRM: needsAmt };
+    if (type === 'wants') return { ...b, actualRM: wantsAmt };
+    if (type === 'savings') return { ...b, actualRM: singleSavings ? savingsAmt : b.actualRM };
+    if (type === 'education') return { ...b, actualRM: eduAmt };
+    if (type === 'zero') return { ...b, actualRM: 0 };
+    return b;
+  });
 }
 
-Rules:
-- Bucket labels must exactly match the chosen model's categories:
-    50/30/20 → Needs, Wants, Savings
-    80/20 → Living, Savings
-    70/20/10 → Living, Savings, Debt & Giving
-    30/30/40 → Housing, Lifestyle, Savings & Investments
-    60/20/20 → Needs, Wants, Savings
-    75/15/10 → Living, Savings, Giving
-    Debt-Clearance → Living, Debt Repayment, Emergency Buffer
-    JARS → Necessities, Long-term Savings, Education, Play, Financial Freedom, Give
-    Reverse Budget → Save First, Fixed Commitments, Discretionary
-- targetRM values must sum exactly to the user's monthly income
-- For Reverse Budget: set Save First target based on goal (Build savings → 20%, Start investing → 25–30%, Just get organized → match current savingsRate or suggest a round number); Fixed Commitments and Discretionary split the remainder
-- For JARS: all 6 bucket targetRM values must sum to income (55+10+10+10+10+5 = 100%)
-- For actualRM distribution:
-    Savings / Save First / Emergency Buffer / Financial Freedom / Long-term Savings bucket → use net (income minus total expenses)
-    If spending by category is provided, distribute expenses across non-savings buckets using category totals:
-      Needs / Necessities / Living / Fixed Commitments ← bills + transport + health + food + other categories
-      Wants / Play / Discretionary ← shopping + entertainment categories
-      Education bucket ← education category
-      Giving / Give bucket ← not directly tracked; set actualRM to 0 and mention in nextAction
-      Debt Repayment ← not directly tracked; set actualRM to 0 and mention in nextAction
-    If only payment method data is available, fall back to: bank transfers → Needs/Living; e-wallet/cash → Wants/Discretionary`;
+// ── Agentic coach ─────────────────────────────────────────────────────────────
+
+export interface AgenticFinancials extends CoachFinancials {
+  goals: Array<{ label: string; target: number; saved: number }>;
+  bills: Array<{ name: string; amount: number; dueDay: number }>;
+  monthlyHistory: Array<{ month: string; income: number; expense: number; net: number }>;
+}
+
+const AGENTIC_TOOLS = [
+  {
+    name: 'get_expense_breakdown',
+    description: 'Returns the current month\'s expenses broken down by category (food, transport, shopping, bills, entertainment, health, education, other) in RM.',
+    parameters: { type: 'OBJECT', properties: {}, required: [] as string[] },
+  },
+  {
+    name: 'get_monthly_history',
+    description: 'Returns the last 5 months of income, total expenses, and net savings to identify spending trends.',
+    parameters: { type: 'OBJECT', properties: {}, required: [] as string[] },
+  },
+  {
+    name: 'get_goals_progress',
+    description: 'Returns the user\'s savings goals with their current saved amount, target, and progress percentage.',
+    parameters: { type: 'OBJECT', properties: {}, required: [] as string[] },
+  },
+  {
+    name: 'get_upcoming_bills',
+    description: 'Returns recurring bills and their due days so the budget plan can account for fixed commitments.',
+    parameters: { type: 'OBJECT', properties: {}, required: [] as string[] },
+  },
+];
+
+export async function getAgenticCoachPlan(
+  profile: CoachProfile,
+  fin: AgenticFinancials,
+  language = 'en',
+): Promise<CoachPlan> {
+  log.info('getAgenticCoachPlan start', `lang=${language}`);
+  const langName = LANG_NAMES[language] ?? 'English';
+
+  const systemText = `${COACH_SYSTEM_PROMPT}
+
+IMPORTANT — You have tools to examine this user's actual financial data before deciding on a model. You MUST call get_expense_breakdown and get_monthly_history before returning the plan. Optionally call get_goals_progress and get_upcoming_bills for extra context. This ensures the plan is grounded in real spending patterns, not just self-reported estimates.
+
+Write the "why", "nextAction", and "encouragement" fields in: ${langName}`;
+
+  const userMessage = `My profile:
+- Age range: ${profile.age}
+- Monthly income bracket: ${profile.incomeBracket}
+- Main financial goal: ${profile.goal}
+- Monthly income: RM ${fin.income.toLocaleString('en-MY')}
+- Total expenses: RM ${fin.expense.toLocaleString('en-MY')}
+- Savings rate: ${fin.savingsRate}%
+- Spending by method: Card RM ${fin.byMethod.card.toLocaleString('en-MY')}, E-wallet RM ${fin.byMethod.ewallet.toLocaleString('en-MY')}, Cash RM ${fin.byMethod.cash.toLocaleString('en-MY')}, Bank RM ${fin.byMethod.bank.toLocaleString('en-MY')}
+
+Please use the available tools to examine my spending data, then produce my personalised budget plan.`;
+
+  const handlers: Record<string, (args: Record<string, unknown>) => unknown> = {
+    get_expense_breakdown: () => fin.byCategory ?? {},
+    get_monthly_history: () => fin.monthlyHistory,
+    get_goals_progress: () =>
+      fin.goals.map((g) => ({
+        label: g.label,
+        target: g.target,
+        saved: g.saved,
+        progressPct: g.target > 0 ? Math.round((g.saved / g.target) * 100) : 0,
+      })),
+    get_upcoming_bills: () =>
+      [...fin.bills].sort((a, b) => a.dueDay - b.dueDay).map((b) => ({
+        name: b.name,
+        amountRM: b.amount,
+        dueDay: b.dueDay,
+      })),
+  };
+
+  const text = await callGeminiWithTools(systemText, userMessage, AGENTIC_TOOLS, handlers);
+  try {
+    const plan = JSON.parse(extractJSON(text)) as CoachPlan;
+    log.info('getAgenticCoachPlan success', plan.model);
+    return plan;
+  } catch {
+    log.error('getAgenticCoachPlan: no JSON in response', text.slice(0, 100));
+    throw new Error('No JSON found in agentic coach response');
+  }
+}
+
 
 function formatCategory(byCategory: Record<string, number>): string {
   const cats = ['food', 'transport', 'shopping', 'bills', 'entertainment', 'health', 'education', 'other'];
@@ -124,7 +196,7 @@ export async function getCoachPlan(
     ? `IMPORTANT: The user has already chosen the "${chosenModel}" model. You MUST use exactly "${chosenModel}" as the model value in your JSON — do not choose a different one. Generate the full bucket breakdown, nextAction, and encouragement for "${chosenModel}".`
     : 'Give me a personalised budgeting plan.';
 
-  const fullPrompt = `${SYSTEM_PROMPT}
+  const fullPrompt = `${COACH_SYSTEM_PROMPT}
 
 My financial profile:
 Age range: ${profile.age}

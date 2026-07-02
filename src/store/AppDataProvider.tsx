@@ -1,8 +1,8 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 
 import { MOCK, type Expense, type ExpenseCategory, type Goal, type Holding, type Income, type HistoryEntry, type Note, type HoldingCurrency, type FxRates } from '@/constants/mock-data';
+import { loadData, saveData } from '@/lib/storage';
 import { FX_DEFAULTS, toRM, convertCcy } from '@/lib/fx';
 import type { CoachProfile, CoachPlan } from '@/lib/coach';
 import type { Language } from '@/i18n';
@@ -12,10 +12,28 @@ import { type ThemeMode } from '@/constants/theme';
 
 const log = getLogger('AppDataProvider');
 
-const STORAGE_KEY = 'money-hub-data';
-
 // Moved outside component — pure function, no closure over state needed
 const nextId = (prefix: string) => `${prefix}${Date.now()}`;
+
+export interface Bill {
+  id: string;
+  name: string;
+  amount: number;
+  dueDay: number;
+  category: string;
+  type: 'bill' | 'payday';
+  reminder?: 'none' | 'daily' | 'weekly';
+  notes?: string;
+}
+
+export interface MonthlyRecord {
+  monthKey: string; // 'YYYY-MM' for sorting/dedup
+  month: string;    // display name e.g. 'January 2026'
+  byCategory: Partial<Record<ExpenseCategory, number>>;
+  income: number;
+  expense: number;
+  net: number;
+}
 
 export interface RawData {
   name: string;
@@ -25,7 +43,9 @@ export interface RawData {
   goals: Goal[];
   holdings: Holding[];
   notes: Note[];
+  bills: Bill[];
   history: HistoryEntry[];
+  monthlyRecords: MonthlyRecord[];
   coachProfile: CoachProfile | null;
   coachPlan: CoachPlan | null;
   language: Language | null;
@@ -46,6 +66,7 @@ export interface DerivedData extends RawData {
   sideShare: number;
   byMethod: { card: number; ewallet: number; cash: number; bank: number };
   byCategory: Record<ExpenseCategory, number>;
+  byCategoryArray: Array<{ cat: ExpenseCategory; amt: number }>;
   portfolioValue: number;        // RM-equivalent total (for home screen / backward compat)
   portfolioValueDisplay: number; // total in the chosen display currency (for invest screen)
 }
@@ -68,6 +89,10 @@ interface AppDataContextValue {
   updateNote: (id: string, updates: Partial<Omit<Note, 'id'>>) => void;
   addNote: (note: Omit<Note, 'id'>) => void;
   deleteNote: (id: string) => void;
+  addBill: (bill: Omit<Bill, 'id'>) => void;
+  updateBill: (id: string, updates: Partial<Omit<Bill, 'id'>>) => void;
+  deleteBill: (id: string) => void;
+  archiveCurrentMonth: () => void;
   importData: (incoming: Partial<RawData>) => void;
   setName: (name: string) => void;
   resetData: () => void;
@@ -89,7 +114,15 @@ const defaultRaw: RawData = {
   goals: MOCK.goals,
   holdings: MOCK.holdings,
   notes: MOCK.notes,
+  bills: [],
   history: MOCK.history,
+  monthlyRecords: [
+    { monthKey: '2026-05', month: 'May 2026',      byCategory: { food: 310, transport: 270, bills: 1450, shopping: 160, health: 600, other: 1000, entertainment: 90, education: 50 }, income: 6300, expense: 3930, net: 2370 },
+    { monthKey: '2026-04', month: 'April 2026',    byCategory: { food: 400, transport: 290, bills: 1450, shopping: 280, health: 600, other: 1000, entertainment: 150, education: 0  }, income: 6100, expense: 4170, net: 1930 },
+    { monthKey: '2026-03', month: 'March 2026',    byCategory: { food: 280, transport: 310, bills: 1450, shopping: 210, health: 600, other: 1000, entertainment: 80,  education: 100 }, income: 6200, expense: 4030, net: 2170 },
+    { monthKey: '2026-02', month: 'February 2026', byCategory: { food: 350, transport: 260, bills: 1450, shopping: 340, health: 600, other: 1000, entertainment: 120, education: 0  }, income: 6100, expense: 4120, net: 1980 },
+    { monthKey: '2026-01', month: 'January 2026',  byCategory: { food: 320, transport: 280, bills: 1450, shopping: 190, health: 600, other: 1000, entertainment: 60,  education: 0  }, income: 6100, expense: 3900, net: 2200 },
+  ],
   coachProfile: null,
   coachPlan: null,
   language: null,
@@ -101,38 +134,41 @@ const defaultRaw: RawData = {
 };
 
 function derive(raw: RawData): DerivedData {
-  const salary = raw.incomes
-    .filter((i) => i.type === 'salary')
-    .reduce((s, i) => s + i.amount, 0);
-  const side = raw.incomes
-    .filter((i) => i.type === 'side')
-    .reduce((s, i) => s + i.amount, 0);
+  // Single pass through incomes
+  let salary = 0, side = 0;
+  for (const i of raw.incomes) {
+    if (i.type === 'salary') salary += i.amount;
+    else side += i.amount;
+  }
   const income = salary + side;
-  const byMethod = {
-    card:    raw.expenses.filter((e) => e.method === 'card').reduce((s, e) => s + e.amount, 0),
-    ewallet: raw.expenses.filter((e) => e.method === 'ewallet').reduce((s, e) => s + e.amount, 0),
-    cash:    raw.expenses.filter((e) => e.method === 'cash').reduce((s, e) => s + e.amount, 0),
-    bank:    raw.expenses.filter((e) => e.method === 'bank').reduce((s, e) => s + e.amount, 0),
-  };
-  const expense = Object.values(byMethod).reduce((s, v) => s + v, 0);
+
+  // Single pass through expenses — collect byMethod and byCategory simultaneously
+  const byMethod = { card: 0, ewallet: 0, cash: 0, bank: 0 };
+  const byCategory: Record<ExpenseCategory, number> = { food: 0, transport: 0, shopping: 0, bills: 0, entertainment: 0, health: 0, education: 0, other: 0 };
+  for (const e of raw.expenses) {
+    byMethod[e.method] = (byMethod[e.method] ?? 0) + e.amount;
+    const cat = (e.category ?? 'other') as ExpenseCategory;
+    byCategory[cat] = (byCategory[cat] ?? 0) + e.amount;
+  }
+  const expense = byMethod.card + byMethod.ewallet + byMethod.cash + byMethod.bank;
+  const byCategoryArray = (Object.entries(byCategory) as [ExpenseCategory, number][])
+    .filter(([, amt]) => amt > 0)
+    .sort(([, a], [, b]) => b - a)
+    .map(([cat, amt]) => ({ cat, amt }));
   const net = income - expense;
   const savingsRate = income > 0 ? Math.round((net / income) * 100) : 0;
   const sideShare = income > 0 ? Math.round((side / income) * 100) : 0;
-  const ALL_CATS: ExpenseCategory[] = ['food', 'transport', 'shopping', 'bills', 'entertainment', 'health', 'education', 'other'];
-  const byCategory = Object.fromEntries(
-    ALL_CATS.map((c) => [c, raw.expenses.filter((e) => (e.category ?? 'other') === c).reduce((s, e) => s + e.amount, 0)]),
-  ) as Record<ExpenseCategory, number>;
+
   const rates = raw.fxRates ?? FX_DEFAULTS;
   const displayCcy = raw.displayCurrency ?? 'RM';
-  const portfolioValue = (raw.holdings ?? []).reduce(
-    (s, h) => s + toRM(h.currentValue, h.currency ?? 'RM', rates),
-    0,
-  );
-  const portfolioValueDisplay = (raw.holdings ?? []).reduce(
-    (s, h) => s + convertCcy(h.currentValue, h.currency ?? 'RM', displayCcy, rates),
-    0,
-  );
-  return { ...raw, income, salary, side, expense, net, savingsRate, sideShare, byMethod, byCategory, portfolioValue, portfolioValueDisplay };
+  let portfolioValue = 0, portfolioValueDisplay = 0;
+  for (const h of raw.holdings ?? []) {
+    const ccy = h.currency ?? 'RM';
+    portfolioValue += toRM(h.currentValue, ccy, rates);
+    portfolioValueDisplay += convertCcy(h.currentValue, ccy, displayCcy, rates);
+  }
+
+  return { ...raw, income, salary, side, expense, net, savingsRate, sideShare, byMethod, byCategory, byCategoryArray, portfolioValue, portfolioValueDisplay };
 }
 
 const AppDataContext = createContext<AppDataContextValue | null>(null);
@@ -142,10 +178,10 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
-    AsyncStorage.getItem(STORAGE_KEY).then((json) => {
-      if (json) {
+    loadData().then((stored) => {
+      if (stored) {
         try {
-          setRaw({ ...defaultRaw, ...JSON.parse(json) });
+          setRaw({ ...defaultRaw, ...stored });
           log.info('data loaded from storage');
         } catch (e) {
           log.error('failed to parse stored data', e);
@@ -159,7 +195,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!loaded) return;
-    AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(raw));
+    saveData(raw);
     log.debug('data persisted to storage');
   }, [raw, loaded]);
 
@@ -229,6 +265,41 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     deleteNote: (id: string) => {
       log.debug('deleteNote', id);
       setRaw((r) => ({ ...r, notes: (r.notes ?? []).filter((n) => n.id !== id) }));
+    },
+
+    addBill: (bill: Omit<Bill, 'id'>) => {
+      log.debug('addBill', bill.name);
+      setRaw((r) => ({ ...r, bills: [...(r.bills ?? []), { ...bill, id: nextId('bl') }] }));
+    },
+    updateBill: (id: string, updates: Partial<Omit<Bill, 'id'>>) => {
+      log.debug('updateBill', id);
+      setRaw((r) => ({ ...r, bills: (r.bills ?? []).map((b) => (b.id === id ? { ...b, ...updates } : b)) }));
+    },
+    deleteBill: (id: string) => {
+      log.debug('deleteBill', id);
+      setRaw((r) => ({ ...r, bills: (r.bills ?? []).filter((b) => b.id !== id) }));
+    },
+
+    archiveCurrentMonth: () => {
+      log.info('archiveCurrentMonth');
+      setRaw((r) => {
+        const d = derive(r);
+        const now = new Date();
+        const monthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+        const record: MonthlyRecord = {
+          monthKey,
+          month: r.month,
+          byCategory: d.byCategory,
+          income: d.income,
+          expense: d.expense,
+          net: d.net,
+        };
+        const existing = (r.monthlyRecords ?? []).findIndex((m) => m.monthKey === monthKey);
+        const records = existing >= 0
+          ? (r.monthlyRecords ?? []).map((m, i) => (i === existing ? record : m))
+          : [...(r.monthlyRecords ?? []), record];
+        return { ...r, monthlyRecords: records.sort((a, b) => b.monthKey.localeCompare(a.monthKey)) };
+      });
     },
 
     importData: (incoming: Partial<RawData>) => {

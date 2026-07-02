@@ -1,11 +1,17 @@
-import { useMemo, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useEffect, useMemo, useState } from 'react';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { Card } from '@/components/ui/Card';
+import { ProgressBar } from '@/components/ui/ProgressBar';
+import { SectionLabel } from '@/components/ui/SectionLabel';
+import { TabSelector } from '@/components/ui/TabSelector';
 import { MF, MR, MS, fmt } from '@/constants/money-theme';
 import { type AppTheme } from '@/constants/theme';
 import { useTheme } from '@/hooks/useTheme';
 import {
+  computeActualRM,
+  getAgenticCoachPlan,
   getCoachPlan,
   getModelOptions,
   type CoachPlan,
@@ -14,6 +20,8 @@ import {
 } from '@/lib/coach';
 import { useT } from '@/i18n';
 import { useAppData } from '@/store/AppDataProvider';
+import { subscribeToAdvisors, type Advisor } from '@/lib/advisors';
+import { ChatScreen } from '@/components/chat-screen';
 
 type Step = 1 | 2 | 3 | 'pick' | 'done';
 
@@ -63,6 +71,60 @@ const BUCKET_GUIDE_KEY: Record<string, string> = {
   'Discretionary':         'coach.guideDiscretionary',
 };
 
+interface MoneyWisdomCard {
+  icon: string;
+  title: string;
+  source: string;
+  summary: string;
+  goal: string;
+  steps: string[];
+}
+
+const MONEY_WISDOM_CARDS: MoneyWisdomCard[] = [
+  {
+    icon: '🧠',
+    title: 'Behavior beats math',
+    source: 'The Psychology of Money — Morgan Housel',
+    summary:
+      'Doing well with money is more about behavior than intelligence. Patience, consistency, and avoiding big mistakes matter more than clever calculations.',
+    goal: 'Build wealth through steady habits, not luck',
+    steps: [
+      'Auto-save a fixed % every payday',
+      'Wait 24 hours before any big purchase',
+      'Do a 5-minute weekly money check-in',
+      'Never invest in something you cannot explain simply',
+    ],
+  },
+  {
+    icon: '📊',
+    title: 'Keep investing simple',
+    source: 'The Simple Path to Wealth — JL Collins',
+    summary:
+      'Low-cost index funds held long term beat most complex strategies. Complexity usually benefits the seller, not you.',
+    goal: 'Grow long-term wealth with minimal effort',
+    steps: [
+      'Spend less than you earn — invest the gap',
+      'Choose low-cost index funds over stock picking',
+      'Do not panic-sell when markets drop',
+      'Avoid debt — it is the wealth killer',
+    ],
+  },
+  {
+    icon: '⏳',
+    title: 'Money is life energy',
+    source: 'Your Money or Your Life — Vicki Robin',
+    summary:
+      'Every ringgit spent costs hours of your life at work. Seeing spending as life energy makes you spend on what truly matters.',
+    goal: 'Spend only on things that match your values',
+    steps: [
+      'Calculate your real hourly wage after costs',
+      'Before buying, ask how many work hours it costs',
+      'Review last month: mark worth it or not worth it',
+      'Cut one "not worth it" item this month',
+    ],
+  },
+];
+
 function incomeToBracket(income: number): string {
   const match = INCOME_BRACKETS.find((b) => income >= b.min && income < b.max);
   return match?.label ?? INCOME_BRACKETS[INCOME_BRACKETS.length - 1].label;
@@ -87,6 +149,20 @@ export default function CoachScreen() {
   const [editSplit, setEditSplit] = useState<Record<string, number>>({});
   const [splitSaved, setSplitSaved] = useState(false);
   const [splitInitKey, setSplitInitKey] = useState('');
+  const [editingRMBucket, setEditingRMBucket] = useState<string | null>(null);
+  const [editingRMValue, setEditingRMValue] = useState('');
+  const [coachView, setCoachView] = useState<'plan' | 'advisors'>('plan');
+  const [chatAdvisor, setChatAdvisor] = useState<Advisor | null>(null);
+  const [advisors, setAdvisors] = useState<Advisor[]>([]);
+  const [advisorsLoading, setAdvisorsLoading] = useState(true);
+
+  useEffect(() => {
+    const unsub = subscribeToAdvisors((list) => {
+      setAdvisors(list);
+      setAdvisorsLoading(false);
+    });
+    return unsub;
+  }, []);
 
   const suggestedBracket = incomeToBracket(data.income);
 
@@ -107,6 +183,15 @@ export default function CoachScreen() {
 
   const splitTotal = Object.values(editSplit).reduce((s, v) => s + v, 0);
   const isSplitValid = splitTotal === 100;
+
+  // Always derive actualRM from live expense data so bucket progress bars stay in sync with the expenses tab
+  const liveBuckets = useMemo(
+    () =>
+      plan && plan.buckets.length > 0
+        ? computeActualRM(plan.buckets, data.byCategory, data.net)
+        : plan?.buckets ?? [],
+    [plan, data.byCategory, data.net],
+  );
 
   const fetchOptions = async (a: { age: string; incomeBracket: string; goal: string }) => {
     setLoading(true);
@@ -137,7 +222,37 @@ export default function CoachScreen() {
   const handleGoal = (value: string) => {
     const finalAnswers = { age: answers.age!, incomeBracket: answers.incomeBracket!, goal: value };
     setAnswers((a) => ({ ...a, goal: value }));
-    fetchOptions(finalAnswers);
+    fetchAgenticPlan(finalAnswers);
+  };
+
+  const fetchAgenticPlan = async (a: { age: string; incomeBracket: string; goal: string }) => {
+    setLoading(true);
+    setError(null);
+    setPlan(null);
+    setStep('done');
+    try {
+      const result = await getAgenticCoachPlan(
+        { age: a.age, incomeBracket: a.incomeBracket, goal: a.goal },
+        {
+          income: data.income,
+          expense: data.expense,
+          net: data.net,
+          savingsRate: data.savingsRate,
+          byMethod: data.byMethod,
+          byCategory: data.byCategory,
+          goals: data.goals,
+          bills: data.bills,
+          monthlyHistory: data.monthlyRecords,
+        },
+        data.language ?? 'en',
+      );
+      setPlan(result);
+      saveCoachResult({ age: a.age, incomeBracket: a.incomeBracket, goal: a.goal }, result);
+    } catch (e: any) {
+      setError(e?.message ?? 'Something went wrong. Please try again.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const fetchPlan = async (chosenModel: string) => {
@@ -223,10 +338,8 @@ export default function CoachScreen() {
   };
 
   const handleRetry = () => {
-    if (step === 'done' && plan) {
-      fetchPlan(plan.model);
-    } else if (answers.age && answers.incomeBracket && answers.goal) {
-      fetchOptions({ age: answers.age, incomeBracket: answers.incomeBracket, goal: answers.goal });
+    if (answers.age && answers.incomeBracket && answers.goal) {
+      fetchAgenticPlan({ age: answers.age, incomeBracket: answers.incomeBracket!, goal: answers.goal });
     }
   };
 
@@ -268,7 +381,21 @@ export default function CoachScreen() {
         <Text style={styles.screenTitle}>{t('coach.title')}</Text>
         <Text style={styles.screenSub}>{t('coach.sub')}</Text>
 
-        {(step === 1 || step === 2 || step === 3) && (
+        <TabSelector
+          tabs={[
+            { key: 'plan', label: t('advisor.planTabLabel') },
+            { key: 'advisors', label: t('advisor.tabLabel') },
+          ]}
+          active={coachView}
+          onSelect={setCoachView}
+          activeColor={C.indigo}
+        />
+
+        {coachView === 'advisors' && (
+          <AdvisorListView advisors={advisors} loading={advisorsLoading} t={t} C={C} styles={styles} onChat={setChatAdvisor} />
+        )}
+
+        {coachView === 'plan' && (step === 1 || step === 2 || step === 3) && (
           <View style={styles.progressRow}>
             {[1, 2, 3].map((n) => (
               <View
@@ -279,8 +406,8 @@ export default function CoachScreen() {
           </View>
         )}
 
-        {step === 1 && (
-          <View style={styles.card}>
+        {coachView === 'plan' && step === 1 && (
+          <Card gap={MS.sm}>
             <Text style={styles.stepBadge}>{t('coach.q1badge')}</Text>
             <Text style={styles.question}>{t('coach.q1')}</Text>
             <Text style={styles.questionSub}>{t('coach.q1sub')}</Text>
@@ -300,11 +427,11 @@ export default function CoachScreen() {
                 </Pressable>
               ))}
             </View>
-          </View>
+          </Card>
         )}
 
-        {step === 2 && (
-          <View style={styles.card}>
+        {coachView === 'plan' && step === 2 && (
+          <Card gap={MS.sm}>
             <Text style={styles.stepBadge}>{t('coach.q2badge')}</Text>
             <Text style={styles.question}>{t('coach.q2')}</Text>
             <Text style={styles.questionSub}>{t('coach.q2sub')}</Text>
@@ -334,11 +461,11 @@ export default function CoachScreen() {
                 );
               })}
             </View>
-          </View>
+          </Card>
         )}
 
-        {step === 3 && (
-          <View style={styles.card}>
+        {coachView === 'plan' && step === 3 && (
+          <Card gap={MS.sm}>
             <Text style={styles.stepBadge}>{t('coach.q3badge')}</Text>
             <Text style={styles.question}>{t('coach.q3')}</Text>
             <Text style={styles.questionSub}>{t('coach.q3sub')}</Text>
@@ -356,10 +483,10 @@ export default function CoachScreen() {
                 </Pressable>
               ))}
             </View>
-          </View>
+          </Card>
         )}
 
-        {step === 'pick' && (
+        {coachView === 'plan' && step === 'pick' && (
           <>
             {profileRecap}
 
@@ -438,7 +565,7 @@ export default function CoachScreen() {
           </>
         )}
 
-        {step === 'done' && (
+        {coachView === 'plan' && step === 'done' && (
           <>
             {profileRecap}
 
@@ -479,11 +606,14 @@ export default function CoachScreen() {
               </View>
             )}
 
-            {!loading && !error && plan && plan.buckets.length > 0 && (
+            {!loading && !error && plan && liveBuckets.length > 0 && (
               <>
-                <View style={styles.card}>
+                <Card gap={MS.sm}>
                   <View style={styles.editHeader}>
-                    <Text style={styles.sectionLabel}>{t('coach.editSplit')}</Text>
+                    <View style={{ gap: 2 }}>
+                      <SectionLabel text={t('coach.editSplit')} />
+                      <Text style={styles.liveLabel}>{t('coach.liveSync')}</Text>
+                    </View>
                     <Pressable
                       onPress={handleSaveSplit}
                       style={({ pressed }) => [styles.saveBtn, pressed && { opacity: 0.7 }]}>
@@ -493,7 +623,7 @@ export default function CoachScreen() {
                     </Pressable>
                   </View>
 
-                  {plan.buckets.map((bucket, i) => {
+                  {liveBuckets.map((bucket, i) => {
                     const pct = editSplit[bucket.label] ?? 0;
                     const targetRM = Math.round((pct / 100) * data.income);
                     const fillPct =
@@ -503,13 +633,14 @@ export default function CoachScreen() {
                     const over = bucket.actualRM > targetRM;
                     const fillColor = over ? C.clay : C.emerald;
                     const guideKey = BUCKET_GUIDE_KEY[bucket.label] ?? 'coach.guideGeneral';
+                    const isEditingRM = editingRMBucket === bucket.label;
 
                     return (
                       <View
                         key={bucket.label}
                         style={[
                           styles.bucketRow,
-                          i < plan.buckets.length - 1 && styles.bucketRowBorder,
+                          i < liveBuckets.length - 1 && styles.bucketRowBorder,
                         ]}>
                         <Text style={styles.bucketLabel}>{bucket.label}</Text>
                         <Text style={styles.bucketGuide}>{t(guideKey)}</Text>
@@ -536,17 +667,43 @@ export default function CoachScreen() {
                             style={({ pressed }) => [styles.adjBtn, pressed && { opacity: 0.55 }]}>
                             <Text style={styles.adjBtnTxt}>+</Text>
                           </Pressable>
-                          <Text style={styles.rmTarget}>{fmt(targetRM)}</Text>
+                          {isEditingRM ? (
+                            <TextInput
+                              style={styles.rmInput}
+                              value={editingRMValue}
+                              keyboardType="numeric"
+                              onChangeText={setEditingRMValue}
+                              onBlur={() => {
+                                const rm = parseInt(editingRMValue.replace(/[^0-9]/g, ''), 10) || 0;
+                                const newPct = data.income > 0
+                                  ? Math.min(100, Math.max(0, Math.round((rm / data.income) * 100)))
+                                  : 0;
+                                setEditSplit((s) => ({ ...s, [bucket.label]: newPct }));
+                                setEditingRMBucket(null);
+                              }}
+                              onSubmitEditing={() => {
+                                const rm = parseInt(editingRMValue.replace(/[^0-9]/g, ''), 10) || 0;
+                                const newPct = data.income > 0
+                                  ? Math.min(100, Math.max(0, Math.round((rm / data.income) * 100)))
+                                  : 0;
+                                setEditSplit((s) => ({ ...s, [bucket.label]: newPct }));
+                                setEditingRMBucket(null);
+                              }}
+                              autoFocus
+                              selectTextOnFocus
+                            />
+                          ) : (
+                            <Pressable
+                              onPress={() => {
+                                setEditingRMBucket(bucket.label);
+                                setEditingRMValue(String(targetRM));
+                              }}>
+                              <Text style={styles.rmTarget}>{fmt(targetRM)}</Text>
+                            </Pressable>
+                          )}
                         </View>
 
-                        <View style={styles.meterBg}>
-                          <View
-                            style={[
-                              styles.meterFill,
-                              { width: `${fillPct}%` as any, backgroundColor: fillColor },
-                            ]}
-                          />
-                        </View>
+                        <ProgressBar value={fillPct} color={fillColor} height={10} />
 
                         <View style={styles.bucketNums}>
                           <Text style={styles.bucketNum}>
@@ -580,13 +737,13 @@ export default function CoachScreen() {
                       </Pressable>
                     </View>
                   )}
-                </View>
+                </Card>
 
                 {!!plan.nextAction && (
-                  <View style={[styles.card, styles.actionCard]}>
+                  <Card style={styles.actionCard}>
                     <Text style={styles.actionBadge}>{t('coach.thisWeek')}</Text>
                     <Text style={styles.actionText}>{plan.nextAction}</Text>
-                  </View>
+                  </Card>
                 )}
 
                 {!!plan.encouragement && (
@@ -597,7 +754,7 @@ export default function CoachScreen() {
               </>
             )}
 
-            {!loading && !error && plan && plan.buckets.length === 0 && (
+            {!loading && !error && plan && liveBuckets.length === 0 && (
               <View style={styles.placeholderCard}>
                 <Text style={styles.placeholderText}>{t('coach.breakdownSoon')}</Text>
                 {!!plan.why && <Text style={styles.placeholderWhy}>{plan.why}</Text>}
@@ -614,9 +771,113 @@ export default function CoachScreen() {
           </>
         )}
 
+        <View style={styles.wisdomHeader}>
+          <SectionLabel text="Money Wisdom" />
+          <Text style={styles.wisdomSub}>Bite-sized lessons from personal finance books</Text>
+        </View>
+
+        {MONEY_WISDOM_CARDS.map((card) => (
+          <Card key={card.title} gap={MS.sm}>
+            <View style={styles.wisdomCardHeader}>
+              <Text style={styles.wisdomIcon}>{card.icon}</Text>
+              <View style={styles.wisdomTitleWrap}>
+                <Text style={styles.wisdomCardTitle}>{card.title}</Text>
+                <Text style={styles.wisdomSource}>{card.source}</Text>
+              </View>
+            </View>
+
+            <Text style={styles.wisdomSummary}>{card.summary}</Text>
+
+            <View style={styles.wisdomGoalBox}>
+              <Text style={styles.wisdomGoalLabel}>Goal</Text>
+              <Text style={styles.wisdomGoalText}>{card.goal}</Text>
+            </View>
+
+            <View style={styles.wisdomStepsWrap}>
+              <Text style={styles.wisdomStepsLabel}>Action Steps</Text>
+              {card.steps.map((step, i) => (
+                <View key={i} style={styles.wisdomStepRow}>
+                  <Text style={styles.wisdomStepNum}>{i + 1}</Text>
+                  <Text style={styles.wisdomStepText}>{step}</Text>
+                </View>
+              ))}
+            </View>
+          </Card>
+        ))}
+
         <View style={{ height: MS.xxl }} />
       </ScrollView>
+      {chatAdvisor && (
+        <View style={StyleSheet.absoluteFill}>
+          <ChatScreen advisor={chatAdvisor} onClose={() => setChatAdvisor(null)} />
+        </View>
+      )}
     </View>
+  );
+}
+
+// ── Advisor list (rendered inside the coach ScrollView) ──────────────────────
+
+function AdvisorListView({
+  advisors,
+  loading,
+  t,
+  C,
+  styles,
+  onChat,
+}: {
+  advisors: Advisor[];
+  loading: boolean;
+  t: (key: string) => string;
+  C: AppTheme;
+  styles: ReturnType<typeof makeStyles>;
+  onChat: (adv: Advisor) => void;
+}) {
+  if (loading) {
+    return (
+      <View style={styles.advisorEmpty}>
+        <ActivityIndicator size="large" color={C.indigo} />
+        <Text style={styles.advisorEmptyHint}>Loading advisors…</Text>
+      </View>
+    );
+  }
+
+  if (advisors.length === 0) {
+    return (
+      <View style={styles.advisorEmpty}>
+        <Text style={styles.advisorEmptyIcon}>🧑‍💼</Text>
+        <Text style={styles.advisorEmptyTitle}>No advisors available</Text>
+        <Text style={styles.advisorEmptyHint}>Check back soon — advisors will appear here once verified.</Text>
+      </View>
+    );
+  }
+
+  return (
+    <>
+      {advisors.map((adv) => (
+        <View key={adv.id} style={styles.advisorCard}>
+          <View style={styles.advisorHeader}>
+            <Text style={styles.advisorAvatar}>{adv.avatar}</Text>
+            <View style={styles.advisorMeta}>
+              <Text style={styles.advisorName}>{adv.name}</Text>
+              <Text style={styles.advisorTitle}>{adv.title}</Text>
+              {!!adv.specialty && <Text style={styles.advisorSpecialty}>{adv.specialty}</Text>}
+            </View>
+          </View>
+
+          {!!adv.bio && <Text style={styles.advisorBio}>{adv.bio}</Text>}
+
+          <View style={styles.advisorDivider} />
+          <Pressable
+            style={({ pressed }) => [styles.chatBtn, pressed && { opacity: 0.7 }]}
+            onPress={() => onChat(adv)}>
+            <Text style={styles.chatBtnIcon}>💬</Text>
+            <Text style={styles.chatBtnTxt}>Chat with {adv.name.split(' ')[0]}</Text>
+          </Pressable>
+        </View>
+      ))}
+      <Text style={styles.advisorDisclaimer}>{t('advisor.disclaimer')}</Text>
+    </>
   );
 }
 
@@ -632,15 +893,6 @@ function makeStyles(C: AppTheme) {
     progressRow: { flexDirection: 'row', gap: MS.sm },
     progressSeg: { flex: 1, height: 4, borderRadius: 2, backgroundColor: C.line },
     progressSegActive: { backgroundColor: C.emerald },
-
-    card: {
-      backgroundColor: C.card,
-      borderWidth: 1,
-      borderColor: C.line,
-      borderRadius: MR.xl,
-      padding: MS.lg,
-      gap: MS.sm,
-    },
 
     stepBadge: {
       fontSize: 10,
@@ -842,13 +1094,6 @@ function makeStyles(C: AppTheme) {
       justifyContent: 'space-between',
       alignItems: 'center',
     },
-    sectionLabel: {
-      fontSize: 10,
-      fontFamily: MF.bold,
-      color: C.muted,
-      textTransform: 'uppercase',
-      letterSpacing: 0.6,
-    },
     saveBtn: {
       backgroundColor: C.emerald,
       borderRadius: 999,
@@ -885,9 +1130,6 @@ function makeStyles(C: AppTheme) {
       textAlign: 'center',
     },
     rmTarget: { fontSize: 13, fontFamily: MF.semiBold, color: C.emeraldDark, marginLeft: MS.xs },
-
-    meterBg: { height: 10, backgroundColor: C.line, borderRadius: 6, overflow: 'hidden' },
-    meterFill: { height: '100%', borderRadius: 6 },
 
     bucketNums: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
     bucketNum: { fontSize: 12, fontFamily: MF.regular, color: C.muted },
@@ -955,5 +1197,101 @@ function makeStyles(C: AppTheme) {
 
     restartBtn: { alignSelf: 'center', paddingVertical: MS.sm, paddingHorizontal: MS.lg },
     restartTxt: { fontSize: 13, fontFamily: MF.medium, color: C.muted },
+
+    liveLabel: { fontSize: 10, fontFamily: MF.medium, color: C.emerald, letterSpacing: 0.3 },
+
+    // Advisor list
+    advisorCard: {
+      backgroundColor: C.card, borderWidth: 1.5, borderColor: C.line,
+      borderRadius: MR.xl, padding: MS.lg, gap: MS.sm,
+    },
+    advisorHeader: { flexDirection: 'row', alignItems: 'center', gap: MS.md },
+    advisorAvatar: { fontSize: 36 },
+    advisorMeta: { flex: 1 },
+    advisorName: { fontSize: 16, fontFamily: MF.bold, color: C.ink },
+    advisorTitle: { fontSize: 12, fontFamily: MF.medium, color: C.muted, marginTop: 2 },
+    advisorSpecialty: { fontSize: 12, fontFamily: MF.regular, color: C.indigo, marginTop: 2 },
+    advisorBio: { fontSize: 13, fontFamily: MF.regular, color: C.muted, lineHeight: 20 },
+    advisorDivider: { height: 1, backgroundColor: C.line },
+    chatBtn: {
+      flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: MS.sm,
+      paddingVertical: 12,
+      borderRadius: MR.lg, backgroundColor: C.indigo,
+    },
+    chatBtnIcon: { fontSize: 16 },
+    chatBtnTxt: { fontSize: 14, fontFamily: MF.semiBold, color: '#fff' },
+    advisorEmpty: {
+      alignItems: 'center', gap: MS.sm,
+      backgroundColor: C.card, borderWidth: 1, borderColor: C.line,
+      borderRadius: MR.xl, padding: MS.xl,
+    },
+    advisorEmptyIcon: { fontSize: 36 },
+    advisorEmptyTitle: { fontSize: 15, fontFamily: MF.semiBold, color: C.ink },
+    advisorEmptyHint: { fontSize: 13, fontFamily: MF.regular, color: C.muted, textAlign: 'center', lineHeight: 20 },
+    advisorDisclaimer: {
+      fontSize: 11, fontFamily: MF.regular, color: C.muted,
+      textAlign: 'center', opacity: 0.65, lineHeight: 17,
+    },
+
+    rmInput: {
+      fontSize: 13,
+      fontFamily: MF.semiBold,
+      color: C.emeraldDark,
+      borderBottomWidth: 1.5,
+      borderBottomColor: C.emerald,
+      minWidth: 60,
+      paddingVertical: 2,
+      paddingHorizontal: 4,
+      marginLeft: MS.xs,
+      textAlign: 'center',
+    },
+
+    // Money Wisdom
+    wisdomHeader: { gap: 2, marginTop: MS.sm },
+    wisdomSub: { fontSize: 13, fontFamily: MF.regular, color: C.muted },
+    wisdomCardHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: MS.md },
+    wisdomIcon: { fontSize: 28 },
+    wisdomTitleWrap: { flex: 1, gap: 2 },
+    wisdomCardTitle: { fontSize: 16, fontFamily: MF.bold, color: C.ink, lineHeight: 22 },
+    wisdomSource: { fontSize: 12, fontFamily: MF.medium, color: C.muted, fontStyle: 'italic' },
+    wisdomSummary: { fontSize: 13, fontFamily: MF.regular, color: C.muted, lineHeight: 20 },
+    wisdomGoalBox: {
+      backgroundColor: C.goldLight,
+      borderWidth: 1,
+      borderColor: C.goldBorder,
+      borderRadius: MR.lg,
+      padding: MS.md,
+      gap: 2,
+    },
+    wisdomGoalLabel: {
+      fontSize: 10,
+      fontFamily: MF.bold,
+      color: C.goldText,
+      textTransform: 'uppercase',
+      letterSpacing: 0.6,
+    },
+    wisdomGoalText: { fontSize: 13, fontFamily: MF.semiBold, color: C.ink, lineHeight: 19 },
+    wisdomStepsWrap: { gap: MS.sm },
+    wisdomStepsLabel: {
+      fontSize: 10,
+      fontFamily: MF.bold,
+      color: C.muted,
+      textTransform: 'uppercase',
+      letterSpacing: 0.6,
+    },
+    wisdomStepRow: { flexDirection: 'row', gap: MS.sm, alignItems: 'flex-start' },
+    wisdomStepNum: {
+      fontSize: 11,
+      fontFamily: MF.bold,
+      color: C.emeraldDark,
+      backgroundColor: C.emerald + '18',
+      width: 18,
+      height: 18,
+      borderRadius: 9,
+      textAlign: 'center',
+      lineHeight: 18,
+      overflow: 'hidden',
+    },
+    wisdomStepText: { flex: 1, fontSize: 13, fontFamily: MF.regular, color: C.ink, lineHeight: 19 },
   });
 }
