@@ -28,8 +28,9 @@ export default function AppTabs() {
               <TabBtn icon={t.icon} label={t.label} />
             </TabTrigger>
           ))}
-          {/* Hidden trigger: registers /reports with the Tab navigator so Link navigation works */}
+          {/* Hidden triggers: register non-tab routes so Link navigation works */}
           <TabTrigger name="reports" href="/reports" style={{ display: 'none' }} />
+          <TabTrigger name="bills"   href="/bills"   style={{ display: 'none' }} />
         </BottomBar>
       </TabList>
     </Tabs>
