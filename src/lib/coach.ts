@@ -108,7 +108,7 @@ async function loadActiveHabitsPromptContext(): Promise<string> {
     const habitsList = habits
       .map((h) => `${h.title} (${h.steps.join('; ')})`)
       .join(' | ');
-    return `\n\nThe user is following these money habits: ${habitsList}. Reference them when relevant in your advice.`;
+    return `\n\nThe user is following these money habits: ${habitsList}. Reference them naturally in your advice when relevant.`;
   } catch {
     return '';
   }
