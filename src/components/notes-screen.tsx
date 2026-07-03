@@ -11,6 +11,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { NoteEditModal, makeTagColors, type NoteModalMode } from '@/components/note-edit-modal';
 import { MF, MR, MS, fmt } from '@/constants/money-theme';
+import { shadow } from '@/constants/shadow';
 import { type AppTheme } from '@/constants/theme';
 import { useTheme } from '@/hooks/useTheme';
 import { type Note, type NoteTag } from '@/constants/mock-data';
@@ -238,10 +239,7 @@ function makeRootStyles(C: AppTheme) {
       borderRadius: MR.lg,
       paddingVertical: 13,
       alignItems: 'center',
-      shadowColor: C.emerald,
-      shadowOffset: { width: 0, height: 3 },
-      shadowOpacity: 0.28,
-      shadowRadius: 6,
+      ...shadow(C.emerald, 0, 3, 6, 0.28),
       elevation: 4,
     },
     addBtnText: { fontSize: 14, fontFamily: MF.bold, color: '#fff' },

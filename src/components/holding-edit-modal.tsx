@@ -13,6 +13,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { MF, MR, MS } from '@/constants/money-theme';
+import { shadow } from '@/constants/shadow';
 import { type AppTheme } from '@/constants/theme';
 import { useTheme } from '@/hooks/useTheme';
 import { type AssetType, type Holding, type HoldingCurrency } from '@/constants/mock-data';
@@ -230,10 +231,7 @@ function makeStyles(C: AppTheme) {
       paddingHorizontal: MS.lg,
       paddingTop: MS.md,
       maxHeight: '90%',
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: -4 },
-      shadowOpacity: 0.12,
-      shadowRadius: 16,
+      ...shadow('#000', 0, -4, 16, 0.12),
       elevation: 12,
     },
     handle: {

@@ -1,22 +1,27 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useRouter } from 'expo-router';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { Card } from '@/components/ui/Card';
+import { ProgressBar } from '@/components/ui/ProgressBar';
+import { SectionLabel } from '@/components/ui/SectionLabel';
 import { MF, MR, MS, fmt } from '@/constants/money-theme';
 import { type AppTheme } from '@/constants/theme';
 import { useTheme } from '@/hooks/useTheme';
 import { CATEGORY_STYLE, type ExpenseCategory } from '@/constants/mock-data';
 import { useT } from '@/i18n';
-import { useAppData } from '@/store/AppDataProvider';
+import { useAppData, type MonthlyRecord } from '@/store/AppDataProvider';
 
 export default function ReportsScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { data } = useAppData();
+  const { data, archiveCurrentMonth } = useAppData();
   const t = useT();
   const C = useTheme();
   const styles = useMemo(() => makeStyles(C), [C]);
+  const [selectedMonthKey, setSelectedMonthKey] = useState<string | null>(null);
+  const [savedFlash, setSavedFlash] = useState(false);
 
   const catLabels: Record<ExpenseCategory, string> = {
     food:          t('expenses.categoryFood'),
@@ -36,11 +41,7 @@ export default function ReportsScreen() {
     bank:    { icon: '🏦', color: C.gold,    label: t('expenses.methodBank')    },
   };
 
-  const ALL_CATS: ExpenseCategory[] = ['food', 'transport', 'shopping', 'bills', 'entertainment', 'health', 'education', 'other'];
-  const catRows = ALL_CATS
-    .map((cat) => ({ cat, amt: data.byCategory[cat] ?? 0 }))
-    .filter((r) => r.amt > 0)
-    .sort((a, b) => b.amt - a.amt);
+  const catRows = data.byCategoryArray;
   const maxCat = Math.max(...catRows.map((r) => r.amt), 1);
   const totalCat = catRows.reduce((s, r) => s + r.amt, 0);
 
@@ -51,6 +52,26 @@ export default function ReportsScreen() {
   const maxMethod = Math.max(...methodRows.map((r) => r.amt), 1);
 
   const maxHistNet = Math.max(...data.history.map((h) => Math.max(h.net, 0)), 1);
+
+  const sortedRecords = useMemo(() =>
+    [...(data.monthlyRecords ?? [])].sort((a, b) => b.monthKey.localeCompare(a.monthKey)),
+    [data.monthlyRecords],
+  );
+  const activeRecord: MonthlyRecord | undefined = selectedMonthKey
+    ? (sortedRecords.find((r) => r.monthKey === selectedMonthKey) ?? sortedRecords[0])
+    : sortedRecords[0];
+
+  const handleSaveMonth = () => {
+    archiveCurrentMonth();
+    setSavedFlash(true);
+    setTimeout(() => setSavedFlash(false), 2000);
+  };
+
+  const activeRecordCats = activeRecord
+    ? Object.entries(activeRecord.byCategory)
+        .filter(([, v]) => (v ?? 0) > 0)
+        .sort(([, a], [, b]) => (b ?? 0) - (a ?? 0)) as [string, number][]
+    : [];
 
   return (
     <View style={styles.root}>
@@ -71,7 +92,7 @@ export default function ReportsScreen() {
         showsVerticalScrollIndicator={false}>
 
         {/* Income vs Expense */}
-        <View style={styles.card}>
+        <Card>
           <Text style={styles.cardTitle}>{t('reports.incomeExpense')}</Text>
           <View style={styles.summaryRow}>
             <View style={styles.summaryCol}>
@@ -97,10 +118,10 @@ export default function ReportsScreen() {
             <View style={[styles.meterFill, { width: `${Math.min(100, Math.max(0, data.savingsRate))}%` }]} />
           </View>
           <Text style={styles.meterLabel}>{data.savingsRate}% {t('dashboard.saved')}</Text>
-        </View>
+        </Card>
 
         {/* Spending by category */}
-        <View style={styles.card}>
+        <Card>
           <Text style={styles.cardTitle}>{t('reports.byCategory')}</Text>
           {catRows.length === 0 ? (
             <Text style={styles.empty}>{t('reports.noSpend')}</Text>
@@ -118,19 +139,17 @@ export default function ReportsScreen() {
                       <Text style={styles.barRowLabel}>{catLabels[cat]}</Text>
                       <Text style={styles.barRowAmt}>{fmt(amt)}</Text>
                     </View>
-                    <View style={styles.barTrack}>
-                      <View style={[styles.barFill, { width: `${Math.max(4, (amt / maxCat) * 100)}%`, backgroundColor: s.fg }]} />
-                    </View>
+                    <ProgressBar value={Math.max(4, (amt / maxCat) * 100)} color={s.fg} />
                     <Text style={styles.barPct}>{t('reports.ofTotal', { pct })}</Text>
                   </View>
                 </View>
               );
             })
           )}
-        </View>
+        </Card>
 
         {/* Spending by payment method */}
-        <View style={styles.card}>
+        <Card>
           <Text style={styles.cardTitle}>{t('reports.byMethod')}</Text>
           {methodRows.length === 0 ? (
             <Text style={styles.empty}>{t('reports.noSpend')}</Text>
@@ -148,19 +167,17 @@ export default function ReportsScreen() {
                       <Text style={styles.barRowLabel}>{meta.label}</Text>
                       <Text style={styles.barRowAmt}>{fmt(amt)}</Text>
                     </View>
-                    <View style={styles.barTrack}>
-                      <View style={[styles.barFill, { width: `${Math.max(4, (amt / maxMethod) * 100)}%`, backgroundColor: meta.color }]} />
-                    </View>
+                    <ProgressBar value={Math.max(4, (amt / maxMethod) * 100)} color={meta.color} />
                     <Text style={styles.barPct}>{t('reports.ofTotal', { pct })}</Text>
                   </View>
                 </View>
               );
             })
           )}
-        </View>
+        </Card>
 
         {/* Savings trend */}
-        <View style={styles.card}>
+        <Card>
           <Text style={styles.cardTitle}>{t('reports.savingsTrend')}</Text>
           <View style={styles.trendBars}>
             {data.history.map((h, i) => {
@@ -180,7 +197,101 @@ export default function ReportsScreen() {
             })}
           </View>
           <Text style={styles.trendHint}>{t('reports.trendHint')}</Text>
-        </View>
+        </Card>
+
+        {/* Monthly Records */}
+        <Card>
+          <View style={styles.monthlyHeader}>
+            <Text style={styles.cardTitle}>{t('reports.monthlyRecords')}</Text>
+            <Pressable
+              style={({ pressed }) => [styles.saveMonthBtn, pressed && { opacity: 0.7 }]}
+              onPress={handleSaveMonth}>
+              <Text style={styles.saveMonthTxt}>
+                {savedFlash ? t('reports.monthSaved') : t('reports.saveMonth')}
+              </Text>
+            </Pressable>
+          </View>
+
+          {sortedRecords.length === 0 ? (
+            <Text style={styles.empty}>{t('reports.noRecords')}</Text>
+          ) : (
+            <>
+              {/* Month pill selector */}
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                style={styles.monthScroll}
+                contentContainerStyle={styles.monthPills}>
+                {sortedRecords.map((r) => {
+                  const active = (selectedMonthKey ?? sortedRecords[0]?.monthKey) === r.monthKey;
+                  return (
+                    <Pressable
+                      key={r.monthKey}
+                      style={[styles.monthPill, active && { backgroundColor: C.emerald + '22', borderColor: C.emerald }]}
+                      onPress={() => setSelectedMonthKey(r.monthKey)}>
+                      <Text style={[styles.monthPillTxt, active && { color: C.emerald, fontFamily: MF.bold }]}>
+                        {r.month}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </ScrollView>
+
+              {/* Selected month summary */}
+              {activeRecord && (
+                <>
+                  <View style={styles.mthSummaryRow}>
+                    <View style={styles.mthSummaryCol}>
+                      <Text style={[styles.mthSummaryLabel, { color: C.emerald }]}>{t('reports.income')}</Text>
+                      <Text style={[styles.mthSummaryAmt, { color: C.emerald }]}>{fmt(activeRecord.income)}</Text>
+                    </View>
+                    <View style={styles.summaryDivider} />
+                    <View style={styles.mthSummaryCol}>
+                      <Text style={[styles.mthSummaryLabel, { color: C.clay }]}>{t('reports.expense')}</Text>
+                      <Text style={[styles.mthSummaryAmt, { color: C.clay }]}>{fmt(activeRecord.expense)}</Text>
+                    </View>
+                    <View style={styles.summaryDivider} />
+                    <View style={styles.mthSummaryCol}>
+                      <Text style={[styles.mthSummaryLabel, { color: activeRecord.net >= 0 ? C.gold : C.clay }]}>
+                        {t('reports.net')}
+                      </Text>
+                      <Text style={[styles.mthSummaryAmt, { color: activeRecord.net >= 0 ? C.gold : C.clay }]}>
+                        {fmt(Math.abs(activeRecord.net))}
+                      </Text>
+                    </View>
+                  </View>
+
+                  {/* Category breakdown */}
+                  <SectionLabel text={t('reports.byCategory')} style={styles.mthCatHeader} />
+                  {activeRecordCats.length === 0 ? (
+                    <Text style={styles.empty}>{t('reports.noSpend')}</Text>
+                  ) : (
+                    activeRecordCats.map(([cat, amt]) => {
+                      const s = CATEGORY_STYLE[cat as keyof typeof CATEGORY_STYLE] ?? CATEGORY_STYLE.other;
+                      const pct = activeRecord.expense > 0 ? Math.round((amt / activeRecord.expense) * 100) : 0;
+                      const maxAmt = activeRecordCats[0]?.[1] ?? 1;
+                      return (
+                        <View key={cat} style={styles.barRow}>
+                          <View style={[styles.catIcon, { backgroundColor: s.bg }]}>
+                            <Text style={styles.catIconText}>{s.icon}</Text>
+                          </View>
+                          <View style={styles.barBody}>
+                            <View style={styles.barTop}>
+                              <Text style={styles.barRowLabel}>{catLabels[cat as keyof typeof catLabels] ?? cat}</Text>
+                              <Text style={styles.barRowAmt}>{fmt(amt)}</Text>
+                            </View>
+                            <ProgressBar value={Math.max(4, (amt / maxAmt) * 100)} color={s.fg} />
+                            <Text style={styles.barPct}>{t('reports.ofTotal', { pct })}</Text>
+                          </View>
+                        </View>
+                      );
+                    })
+                  )}
+                </>
+              )}
+            </>
+          )}
+        </Card>
 
         <View style={{ height: MS.xxl }} />
       </ScrollView>
@@ -218,13 +329,6 @@ function makeStyles(C: AppTheme) {
     scroll: { flex: 1 },
     content: { padding: MS.lg, gap: MS.md },
 
-    card: {
-      backgroundColor: C.card,
-      borderWidth: 1,
-      borderColor: C.line,
-      borderRadius: MR.xl,
-      padding: MS.lg,
-    },
     cardTitle: { fontSize: 15, fontFamily: MF.bold, color: C.ink, marginBottom: MS.md },
 
     summaryRow: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: MS.md },
@@ -244,8 +348,6 @@ function makeStyles(C: AppTheme) {
     barTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
     barRowLabel: { fontSize: 13, fontFamily: MF.medium, color: C.ink },
     barRowAmt: { fontSize: 13, fontFamily: MF.bold, color: C.ink },
-    barTrack: { height: 8, backgroundColor: C.line, borderRadius: 4, overflow: 'hidden' },
-    barFill: { height: '100%', borderRadius: 4 },
     barPct: { fontSize: 11, fontFamily: MF.regular, color: C.muted, marginTop: 3 },
 
     empty: { fontSize: 13, fontFamily: MF.regular, color: C.muted, textAlign: 'center', paddingVertical: MS.md },
@@ -256,5 +358,29 @@ function makeStyles(C: AppTheme) {
     trendFill: { width: '80%', borderRadius: 5 },
     trendLabel: { fontSize: 10, fontFamily: MF.medium, color: C.muted },
     trendHint: { fontSize: 11, fontFamily: MF.regular, color: C.muted, marginTop: MS.sm },
+
+    monthlyHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: MS.md },
+    saveMonthBtn: {
+      paddingHorizontal: MS.md, paddingVertical: 7,
+      borderRadius: MR.md, backgroundColor: C.emerald + '22',
+      borderWidth: 1, borderColor: C.emerald,
+    },
+    saveMonthTxt: { fontSize: 11, fontFamily: MF.bold, color: C.emerald },
+
+    monthScroll: { marginBottom: MS.md },
+    monthPills: { gap: MS.sm, paddingBottom: 2 },
+    monthPill: {
+      paddingHorizontal: MS.md, paddingVertical: 7,
+      borderRadius: MR.md, borderWidth: 1, borderColor: C.line,
+      backgroundColor: C.card,
+    },
+    monthPillTxt: { fontSize: 12, fontFamily: MF.medium, color: C.muted },
+
+    mthSummaryRow: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: MS.md },
+    mthSummaryCol: { flex: 1, alignItems: 'center' },
+    mthSummaryLabel: { fontSize: 10, fontFamily: MF.medium, textTransform: 'uppercase', letterSpacing: 0.5 },
+    mthSummaryAmt: { fontSize: 14, fontFamily: MF.bold, marginTop: 4 },
+
+    mthCatHeader: { marginBottom: MS.md },
   });
 }

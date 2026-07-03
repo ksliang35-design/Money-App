@@ -13,6 +13,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { MF, MR, MS } from '@/constants/money-theme';
+import { shadow } from '@/constants/shadow';
 import { type AppTheme } from '@/constants/theme';
 import { useTheme } from '@/hooks/useTheme';
 import { type Expense, type ExpenseCategory, CATEGORY_STYLE } from '@/constants/mock-data';
@@ -249,10 +250,7 @@ function makeStyles(C: AppTheme) {
       borderTopRightRadius: MR.xxl,
       paddingHorizontal: MS.lg,
       paddingTop: MS.md,
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: -4 },
-      shadowOpacity: 0.12,
-      shadowRadius: 16,
+      ...shadow('#000', 0, -4, 16, 0.12),
       elevation: 12,
     },
     handle: {

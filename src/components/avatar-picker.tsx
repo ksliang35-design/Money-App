@@ -12,6 +12,7 @@ import {
   type AvatarEmoji,
 } from '@/constants/avatar';
 import { MF, MR, MS } from '@/constants/money-theme';
+import { shadow } from '@/constants/shadow';
 import { type AppTheme } from '@/constants/theme';
 import { useTheme } from '@/hooks/useTheme';
 import { useT } from '@/i18n';
@@ -180,10 +181,7 @@ function makeStyles(C: AppTheme) {
     swatchActive: {
       borderWidth: 3,
       borderColor: '#fff',
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.25,
-      shadowRadius: 4,
+      ...shadow('#000', 0, 2, 4, 0.25),
       elevation: 4,
     },
     swatchCheck: { fontSize: 16, color: '#fff', fontFamily: MF.bold },

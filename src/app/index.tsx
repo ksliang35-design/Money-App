@@ -1,49 +1,38 @@
-import { LinearGradient } from 'expo-linear-gradient';
 import { Link } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AvatarDisplay } from '@/components/avatar-display';
-import { LanguagePicker } from '@/components/language-picker';
 import { MoneyAIOverlay } from '@/components/money-ai-overlay';
-import { MF, MR, MS, fmt } from '@/constants/money-theme';
+import { Card } from '@/components/ui/Card';
+import { HeroCard } from '@/components/ui/HeroCard';
+import { ProgressBar } from '@/components/ui/ProgressBar';
+import { StatPill } from '@/components/ui/StatPill';
+import { MF, MS, fmt } from '@/constants/money-theme';
+import { shadow } from '@/constants/shadow';
 import { type AppTheme } from '@/constants/theme';
 import { useTheme } from '@/hooks/useTheme';
-import { useT, type Language } from '@/i18n';
+import { useT } from '@/i18n';
 import { useAppData } from '@/store/AppDataProvider';
 
 export default function DashboardScreen() {
   const insets = useSafeAreaInsets();
   const [aiOpen, setAiOpen] = useState(false);
-  const [langOpen, setLangOpen] = useState(false);
-  const { data, setLanguage, setThemeMode } = useAppData();
+  const { data } = useAppData();
   const t = useT();
   const C = useTheme();
   const styles = useMemo(() => makeStyles(C), [C]);
 
-  const currentTheme = data.themeMode ?? 'system';
-  const THEME_CYCLE = { system: 'light', light: 'dark', dark: 'system' } as const;
-  const THEME_ICON  = { light: '☀️', dark: '🌙', system: '🔄' };
-  const cycleTheme  = () => setThemeMode(THEME_CYCLE[currentTheme]);
-
   const maxHistNet = Math.max(...data.history.map((h) => h.net), 1);
-  const sideShare = data.sideShare;
-  const circumf = 2 * Math.PI * 46;
-  const segments = [
+
+  const incomeSplit = [
     { label: t('dashboard.salaryLabel'), val: data.salary, color: C.emerald },
-    { label: t('dashboard.sideLabel'), val: data.side, color: C.gold },
+    { label: t('dashboard.sideLabel'),   val: data.side,   color: C.gold   },
   ];
 
   const initials = data.name.slice(0, 2).toUpperCase();
   const portfolioVal = data.portfolioValue ?? 0;
-
-  const holdings = data.holdings ?? [];
-  const trackedHoldings = holdings.filter(h => h.units != null && h.buyPrice != null);
-  const totalCost = trackedHoldings.reduce((s, h) => s + h.units! * h.buyPrice!, 0);
-  const totalTrackedValue = trackedHoldings.reduce((s, h) => s + h.currentValue, 0);
-  const gainLossPct =
-    totalCost > 0 ? ((totalTrackedValue - totalCost) / totalCost) * 100 : null;
 
   return (
     <View style={styles.root}>
@@ -65,27 +54,17 @@ export default function DashboardScreen() {
               <Text style={styles.month}>{data.month}</Text>
             </View>
           </View>
-          <View style={styles.headerBtns}>
-            <Pressable style={styles.langBadge} onPress={() => setLangOpen(true)}>
-              <Text style={styles.langGlyph}>🌐</Text>
-            </Pressable>
-            <Pressable style={styles.langBadge} onPress={cycleTheme}>
-              <Text style={styles.langGlyph}>{THEME_ICON[currentTheme]}</Text>
-            </Pressable>
-            <Pressable style={styles.horseBadge} onPress={() => setAiOpen(true)}>
-              <Text style={styles.horseGlyph}>♞</Text>
-            </Pressable>
-          </View>
+          <Pressable style={styles.horseBadge} onPress={() => setAiOpen(true)}>
+            <Text style={styles.horseGlyph}>♞</Text>
+          </Pressable>
         </View>
 
-        {/* Hero card */}
-        <LinearGradient
-          colors={[C.emerald, C.emeraldDark]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={styles.hero}>
-          <Text style={styles.heroLabel}>{t('dashboard.heroLabel')}</Text>
-          <Text style={styles.heroBig}>{fmt(data.net)}</Text>
+        {/* Hero */}
+        <HeroCard
+          gradient={[C.emerald, C.emeraldDark]}
+          shadowColor={C.emerald}
+          label={t('dashboard.heroLabel')}
+          amount={fmt(data.net)}>
           <View style={styles.heroLine} />
           <View style={styles.heroRow}>
             <View>
@@ -101,50 +80,38 @@ export default function DashboardScreen() {
               <Text style={styles.heroVal}>{data.savingsRate}%</Text>
             </View>
           </View>
-        </LinearGradient>
+        </HeroCard>
 
-        {/* Quick stats */}
-        <View style={styles.grid2}>
-          <View style={styles.statCard}>
-            <Text style={styles.statKey}>{t('dashboard.sideIncome')}</Text>
-            <Text style={[styles.statVal, { color: C.gold }]}>{fmt(data.side)}</Text>
-          </View>
-          <View style={styles.statCard}>
-            <Text style={styles.statKey}>{t('dashboard.onCard')}</Text>
-            <Text style={[styles.statVal, { color: C.clay }]}>{fmt(data.byMethod.card)}</Text>
-          </View>
+        {/* Stats pills */}
+        <View style={styles.statsRow}>
+          <StatPill value={fmt(data.side)} label={t('dashboard.sideIncome')} valueColor={C.gold} />
+          <StatPill value={fmt(data.byMethod.card)} label={t('dashboard.onCard')} valueColor={C.clay} />
+          <StatPill value={fmt(portfolioVal)} label="Portfolio" />
         </View>
 
-        {/* Income split */}
-        <View style={styles.card}>
+        {/* Income split — horizontal bars */}
+        <Card gap={MS.md}>
           <Text style={styles.cardTitle}>{t('dashboard.incomeSplit')}</Text>
-          <View style={styles.donutWrap}>
-            <DonutChart segments={segments} total={data.income} circum={circumf} centerLabel={`${sideShare}%`} centerSub={t('dashboard.sideSub')} />
-            <View style={styles.legend}>
-              {segments.map((s) => (
-                <View key={s.label} style={styles.legRow}>
-                  <View style={[styles.legDot, { backgroundColor: s.color }]} />
-                  <Text style={styles.legLabel}>{s.label}</Text>
-                  <Text style={styles.legAmt}>{fmt(s.val)}</Text>
+          {incomeSplit.map((s) => {
+            const pct = data.income > 0 ? Math.round((s.val / data.income) * 100) : 0;
+            return (
+              <View key={s.label} style={styles.splitRow}>
+                <View style={[styles.splitDot, { backgroundColor: s.color }]} />
+                <View style={styles.splitBody}>
+                  <View style={styles.splitTop}>
+                    <Text style={styles.splitLabel}>{s.label}</Text>
+                    <Text style={styles.splitAmt}>{fmt(s.val)}</Text>
+                  </View>
+                  <ProgressBar value={Math.max(4, pct)} color={s.color} />
+                  <Text style={styles.splitPct}>{pct}% of income</Text>
                 </View>
-              ))}
-              <View style={styles.indepBox}>
-                <Text style={styles.indepTitle}>{t('dashboard.indepMeter')}</Text>
-                <View style={styles.meterBg}>
-                  <View style={[styles.meterFill, { width: `${Math.min(100, sideShare)}%`, backgroundColor: C.gold }]} />
-                </View>
-                <Text style={styles.indepNote}>
-                  {sideShare < 30
-                    ? t('dashboard.indepLow', { pct: sideShare })
-                    : t('dashboard.indepHigh')}
-                </Text>
               </View>
-            </View>
-          </View>
-        </View>
+            );
+          })}
+        </Card>
 
         {/* Savings history */}
-        <View style={styles.card}>
+        <Card gap={MS.md}>
           <Text style={styles.cardTitle}>{t('dashboard.savingsHistory')}</Text>
           <View style={styles.bars}>
             {data.history.map((h, i) => {
@@ -152,129 +119,19 @@ export default function DashboardScreen() {
               const barH = Math.max(6, (h.net / maxHistNet) * 84);
               return (
                 <View key={h.month} style={styles.barCol}>
-                  <View
-                    style={[
-                      styles.barFill,
-                      { height: barH, backgroundColor: isCurrent ? C.gold : C.emerald },
-                    ]}
-                  />
+                  <View style={[styles.histBar, { height: barH, backgroundColor: isCurrent ? C.gold : C.emerald }]} />
                   <Text style={styles.barLabel}>{h.month}</Text>
                 </View>
               );
             })}
           </View>
           <Text style={styles.barHint}>{t('dashboard.historyHint')}</Text>
-        </View>
-
-        {/* Hub cards */}
-        <Text style={styles.sectionLabel}>{t('dashboard.quickAccess')}</Text>
-
-        <Link href="/invest" asChild>
-          <Pressable style={({ pressed }) => [styles.hubCard, pressed && styles.hubCardPressed]}>
-            <Text style={styles.hubIcon}>📈</Text>
-            <View style={styles.hubBody}>
-              <Text style={styles.hubTitle}>{t('dashboard.investTitle')}</Text>
-              <View style={styles.hubValRow}>
-                <Text style={styles.hubSub}>
-                  {t('dashboard.investPreview', { val: fmt(portfolioVal) })}
-                </Text>
-                {gainLossPct != null && (
-                  <Text style={[styles.hubBadge, { color: gainLossPct >= 0 ? C.emerald : C.clay }]}>
-                    {gainLossPct >= 0 ? '↑' : '↓'} {Math.abs(gainLossPct).toFixed(1)}%
-                  </Text>
-                )}
-              </View>
-            </View>
-            <Text style={styles.hubArrow}>›</Text>
-          </Pressable>
-        </Link>
-
-        <Link href="/coach" asChild>
-          <Pressable style={({ pressed }) => [styles.hubCard, pressed && styles.hubCardPressed]}>
-            <Text style={styles.hubIcon}>🧭</Text>
-            <View style={styles.hubBody}>
-              <Text style={styles.hubTitle}>{t('dashboard.coachTitle')}</Text>
-              {data.coachPlan ? (
-                <>
-                  <Text style={styles.hubModel}>{data.coachPlan.model}</Text>
-                  <Text style={styles.hubTip} numberOfLines={1}>{data.coachPlan.nextAction}</Text>
-                </>
-              ) : (
-                <Text style={styles.hubSub}>{t('dashboard.coachSub')}</Text>
-              )}
-            </View>
-            <Text style={styles.hubArrow}>›</Text>
-          </Pressable>
-        </Link>
-
-        <Link href="/reports" asChild>
-          <Pressable style={({ pressed }) => [styles.hubCard, pressed && styles.hubCardPressed]}>
-            <Text style={styles.hubIcon}>📊</Text>
-            <View style={styles.hubBody}>
-              <Text style={styles.hubTitle}>{t('reports.title')}</Text>
-              <Text style={styles.hubSub}>{t('reports.hubSub')}</Text>
-            </View>
-            <Text style={styles.hubArrow}>›</Text>
-          </Pressable>
-        </Link>
+        </Card>
 
         <View style={{ height: MS.xxl }} />
       </ScrollView>
 
       <MoneyAIOverlay visible={aiOpen} onClose={() => setAiOpen(false)} />
-      {langOpen && (
-        <LanguagePicker
-          onSelect={(l: Language) => { setLanguage(l); setLangOpen(false); }}
-          onClose={() => setLangOpen(false)}
-        />
-      )}
-    </View>
-  );
-}
-
-function DonutChart({
-  segments,
-  total,
-  circum,
-  centerLabel,
-  centerSub,
-}: {
-  segments: { val: number; color: string }[];
-  total: number;
-  circum: number;
-  centerLabel: string;
-  centerSub: string;
-}) {
-  const C = useTheme();
-  const styles = useMemo(() => makeStyles(C), [C]);
-  const fracs = segments.map((s) => (total > 0 ? s.val / total : 0));
-  const rotations = fracs.map((_, i) => fracs.slice(0, i).reduce((sum, f) => sum + f, 0));
-
-  return (
-    <View style={styles.donutContainer}>
-      <View style={styles.donutOuter}>
-        <View style={styles.donutInner}>
-          <Text style={styles.donutCenterLabel}>{centerLabel}</Text>
-          <Text style={styles.donutCenterSub}>{centerSub}</Text>
-        </View>
-        {segments.map((s, i) => {
-          const frac = fracs[i];
-          return (
-            <View
-              key={i}
-              style={[
-                styles.donutSegment,
-                {
-                  borderColor: s.color,
-                  opacity: frac > 0 ? 1 : 0,
-                  transform: [{ rotate: `${rotations[i] * 360}deg` }],
-                  borderWidth: 10,
-                },
-              ]}
-            />
-          );
-        })}
-      </View>
     </View>
   );
 }
@@ -285,193 +142,44 @@ function makeStyles(C: AppTheme) {
     scroll: { flex: 1 },
     content: { padding: MS.lg, gap: MS.md },
 
-    headerRow: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      marginBottom: MS.sm,
-    },
-    headerLeft: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: MS.md,
-      flex: 1,
-    },
+    // ── Header ──
+    headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: MS.sm },
+    headerLeft: { flexDirection: 'row', alignItems: 'center', gap: MS.md, flex: 1 },
     greeting: { fontSize: 17, fontFamily: MF.bold, color: C.ink },
     month: { fontSize: 12, fontFamily: MF.regular, color: C.muted, marginTop: 1 },
-
-    headerBtns: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: MS.sm,
-    },
-    langBadge: {
-      width: 40,
-      height: 40,
-      borderRadius: 20,
-      backgroundColor: C.card,
-      borderWidth: 1,
-      borderColor: C.line,
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    langGlyph: { fontSize: 20 },
     horseBadge: {
-      width: 48,
-      height: 48,
-      borderRadius: 24,
-      backgroundColor: C.clay,
-      alignItems: 'center',
-      justifyContent: 'center',
-      shadowColor: C.clay,
-      shadowOffset: { width: 0, height: 4 },
-      shadowOpacity: 0.4,
-      shadowRadius: 8,
-      elevation: 6,
+      width: 48, height: 48, borderRadius: 24,
+      backgroundColor: C.clay, alignItems: 'center', justifyContent: 'center',
+      ...shadow(C.clay, 0, 4, 8, 0.4), elevation: 6,
     },
     horseGlyph: { fontSize: 22, color: '#fff' },
 
-    hero: {
-      borderRadius: MR.xxl,
-      padding: MS.xl,
-      shadowColor: C.emerald,
-      shadowOffset: { width: 0, height: 10 },
-      shadowOpacity: 0.35,
-      shadowRadius: 18,
-      elevation: 8,
-    },
-    heroLabel: {
-      fontSize: 11,
-      fontFamily: MF.semiBold,
-      color: 'rgba(255,255,255,0.8)',
-      letterSpacing: 0.8,
-      textTransform: 'uppercase',
-    },
-    heroBig: {
-      fontSize: 42,
-      fontFamily: MF.bold,
-      color: '#fff',
-      lineHeight: 50,
-      marginTop: 6,
-    },
-    heroLine: {
-      height: 3,
-      width: 48,
-      backgroundColor: C.gold,
-      borderRadius: 2,
-      marginVertical: 12,
-    },
+    // ── Hero sub-row (rendered inside HeroCard) ──
+    heroLine: { height: 3, width: 48, backgroundColor: C.gold, borderRadius: 2, marginVertical: 12 },
     heroRow: { flexDirection: 'row', gap: MS.xl },
-    heroKey: {
-      fontSize: 10,
-      fontFamily: MF.medium,
-      color: 'rgba(255,255,255,0.75)',
-      textTransform: 'uppercase',
-      letterSpacing: 0.5,
-    },
-    heroVal: {
-      fontSize: 15,
-      fontFamily: MF.bold,
-      color: '#fff',
-      marginTop: 3,
-    },
+    heroKey: { fontSize: 10, fontFamily: MF.medium, color: 'rgba(255,255,255,0.75)', textTransform: 'uppercase', letterSpacing: 0.5 },
+    heroVal: { fontSize: 15, fontFamily: MF.bold, color: '#fff', marginTop: 3 },
 
-    grid2: { flexDirection: 'row', gap: MS.sm },
-    statCard: {
-      flex: 1,
-      backgroundColor: C.card,
-      borderWidth: 1,
-      borderColor: C.line,
-      borderRadius: MR.lg,
-      padding: MS.md,
-    },
-    statKey: { fontSize: 11, fontFamily: MF.medium, color: C.muted, textTransform: 'uppercase', letterSpacing: 0.4 },
-    statVal: { fontSize: 22, fontFamily: MF.bold, marginTop: 4 },
+    // ── Stats row ──
+    statsRow: { flexDirection: 'row', gap: MS.sm },
 
-    card: {
-      backgroundColor: C.card,
-      borderWidth: 1,
-      borderColor: C.line,
-      borderRadius: MR.xl,
-      padding: MS.lg,
-    },
-    cardTitle: { fontSize: 15, fontFamily: MF.bold, color: C.ink, marginBottom: MS.md },
+    // ── Card title ──
+    cardTitle: { fontSize: 15, fontFamily: MF.bold, color: C.ink },
 
-    donutWrap: { flexDirection: 'row', alignItems: 'flex-start', gap: MS.lg },
-    donutContainer: { width: 100, height: 100 },
-    donutOuter: {
-      width: 100,
-      height: 100,
-      borderRadius: 50,
-      borderWidth: 16,
-      borderColor: C.emerald,
-      alignItems: 'center',
-      justifyContent: 'center',
-      position: 'relative',
-      overflow: 'hidden',
-    },
-    donutInner: { alignItems: 'center' },
-    donutCenterLabel: { fontSize: 14, fontFamily: MF.bold, color: C.ink },
-    donutCenterSub: { fontSize: 9, fontFamily: MF.medium, color: C.muted },
-    donutSegment: {
-      position: 'absolute',
-      width: 100,
-      height: 100,
-      borderRadius: 50,
-    },
+    // ── Income split bars ──
+    splitRow: { flexDirection: 'row', alignItems: 'flex-start', gap: MS.sm },
+    splitDot: { width: 10, height: 10, borderRadius: 3, flexShrink: 0, marginTop: 4 },
+    splitBody: { flex: 1, gap: 3 },
+    splitTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
+    splitLabel: { fontSize: 13, fontFamily: MF.medium, color: C.ink },
+    splitAmt: { fontSize: 13, fontFamily: MF.bold, color: C.ink },
+    splitPct: { fontSize: 11, fontFamily: MF.regular, color: C.muted, marginTop: 3 },
 
-    legend: { flex: 1, gap: MS.sm },
-    legRow: { flexDirection: 'row', alignItems: 'center', gap: MS.sm },
-    legDot: { width: 10, height: 10, borderRadius: 3 },
-    legLabel: { flex: 1, fontSize: 13, fontFamily: MF.regular, color: C.ink },
-    legAmt: { fontSize: 13, fontFamily: MF.bold, color: C.ink },
-
-    indepBox: {
-      backgroundColor: C.goldLight,
-      borderWidth: 1,
-      borderColor: C.goldBorder,
-      borderRadius: MR.md,
-      padding: MS.sm,
-      marginTop: MS.sm,
-    },
-    indepTitle: { fontSize: 10, fontFamily: MF.bold, color: C.goldText, textTransform: 'uppercase', letterSpacing: 0.5 },
-    meterBg: { height: 7, backgroundColor: C.goldMeterBg, borderRadius: 4, marginVertical: 6, overflow: 'hidden' },
-    meterFill: { height: '100%', borderRadius: 4 },
-    indepNote: { fontSize: 11, fontFamily: MF.regular, color: C.goldText, lineHeight: 16 },
-
+    // ── Savings history ──
     bars: { flexDirection: 'row', alignItems: 'flex-end', gap: 10, height: 100 },
     barCol: { flex: 1, alignItems: 'center', justifyContent: 'flex-end', gap: 4 },
-    barFill: { width: '80%', borderRadius: 6, minHeight: 6 },
+    histBar: { width: '80%', borderRadius: 6, minHeight: 6 },
     barLabel: { fontSize: 10, fontFamily: MF.medium, color: C.muted },
-    barHint: { fontSize: 11, fontFamily: MF.regular, color: C.muted, marginTop: MS.sm },
-
-    sectionLabel: {
-      fontSize: 11,
-      fontFamily: MF.bold,
-      color: C.muted,
-      textTransform: 'uppercase',
-      letterSpacing: 0.6,
-      marginTop: MS.xs,
-    },
-    hubCard: {
-      backgroundColor: C.card,
-      borderWidth: 1,
-      borderColor: C.line,
-      borderRadius: MR.xl,
-      padding: MS.lg,
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: MS.md,
-    },
-    hubCardPressed: { opacity: 0.7 },
-    hubIcon: { fontSize: 28 },
-    hubBody: { flex: 1 },
-    hubTitle: { fontSize: 15, fontFamily: MF.bold, color: C.ink },
-    hubSub: { fontSize: 12, fontFamily: MF.regular, color: C.muted, marginTop: 2 },
-    hubValRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 },
-    hubBadge: { fontSize: 11, fontFamily: MF.semiBold },
-    hubModel: { fontSize: 13, fontFamily: MF.semiBold, color: C.indigo, marginTop: 2 },
-    hubTip: { fontSize: 11, fontFamily: MF.regular, color: C.muted, marginTop: 1 },
-    hubArrow: { fontSize: 22, color: C.muted },
+    barHint: { fontSize: 11, fontFamily: MF.regular, color: C.muted },
   });
 }

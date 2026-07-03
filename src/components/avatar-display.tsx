@@ -3,6 +3,7 @@ import { Text, View } from 'react-native';
 
 import { AVATAR_COLOUR_MAP, DEFAULT_AVATAR, type AvatarConfig } from '@/constants/avatar';
 import { MF } from '@/constants/money-theme';
+import { shadow } from '@/constants/shadow';
 
 interface Props {
   config: AvatarConfig | null;
@@ -22,10 +23,7 @@ export function AvatarDisplay({ config, initials, size }: Props) {
     borderRadius: radius,
     alignItems: 'center' as const,
     justifyContent: 'center' as const,
-    shadowColor: bg,
-    shadowOffset: { width: 0, height: Math.round(size * 0.075) },
-    shadowOpacity: 0.4,
-    shadowRadius: Math.round(size * 0.15),
+    ...shadow(bg, 0, Math.round(size * 0.075), Math.round(size * 0.15), 0.4),
     elevation: 4,
   };
 
