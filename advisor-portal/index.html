@@ -1,0 +1,546 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Advisor Portal — Money App</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0f1117;
+      --card: #1a1d27;
+      --line: #2a2d3a;
+      --ink: #e8eaf0;
+      --muted: #6b7280;
+      --indigo: #6c63ff;
+      --indigo-dark: #5a52e0;
+      --emerald: #34d399;
+      --clay: #f87171;
+      --user-bubble: #6c63ff;
+      --advisor-bubble: #1e2130;
+      --radius: 14px;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: var(--bg);
+      color: var(--ink);
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ── Login ─────────────────────────────── */
+    #login-screen {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .login-card {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 40px;
+      width: 100%;
+      max-width: 420px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+    .login-logo { font-size: 36px; text-align: center; }
+    .login-title { font-size: 22px; font-weight: 700; text-align: center; }
+    .login-sub { font-size: 13px; color: var(--muted); text-align: center; line-height: 1.6; }
+    .login-label { font-size: 11px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; }
+    .login-input {
+      width: 100%; padding: 12px 14px; background: var(--bg);
+      border: 1.5px solid var(--line); border-radius: 10px;
+      color: var(--ink); font-size: 14px; outline: none;
+      font-family: monospace;
+    }
+    .login-input:focus { border-color: var(--indigo); }
+    .login-btn {
+      background: var(--indigo); color: #fff; border: none;
+      border-radius: 10px; padding: 13px; font-size: 15px;
+      font-weight: 600; cursor: pointer; transition: opacity 0.15s;
+    }
+    .login-btn:hover { opacity: 0.88; }
+    .login-hint {
+      font-size: 11px; color: var(--muted); text-align: center; line-height: 1.6;
+    }
+    .login-error {
+      background: #3b1f1f; border: 1px solid var(--clay);
+      border-radius: 8px; padding: 10px 14px;
+      font-size: 13px; color: var(--clay); text-align: center;
+      display: none;
+    }
+
+    /* ── App shell ─────────────────────────── */
+    #app-screen { flex: 1; display: none; flex-direction: column; overflow: hidden; }
+
+    .top-bar {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 12px 20px; border-bottom: 1px solid var(--line);
+      background: var(--card);
+    }
+    .top-bar-left { display: flex; align-items: center; gap: 10px; }
+    .top-logo { font-size: 20px; }
+    .top-title { font-size: 16px; font-weight: 700; }
+    .top-id {
+      font-size: 11px; color: var(--muted); font-family: monospace;
+      background: var(--bg); padding: 2px 8px; border-radius: 6px;
+      border: 1px solid var(--line);
+    }
+    .top-badge {
+      font-size: 12px; color: var(--emerald); font-weight: 600;
+      display: flex; align-items: center; gap: 5px;
+    }
+    .dot-live {
+      width: 7px; height: 7px; border-radius: 50%;
+      background: var(--emerald); animation: pulse 2s infinite;
+    }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+
+    .main-layout { flex: 1; display: flex; overflow: hidden; }
+
+    /* ── Sidebar ───────────────────────────── */
+    .sidebar {
+      width: 300px; min-width: 220px; border-right: 1px solid var(--line);
+      display: flex; flex-direction: column; overflow: hidden;
+    }
+    .sidebar-header {
+      padding: 14px 16px 10px; border-bottom: 1px solid var(--line);
+    }
+    .sidebar-title { font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; }
+    .conv-count { font-size: 11px; color: var(--muted); margin-top: 2px; }
+    .conv-list { flex: 1; overflow-y: auto; }
+    .conv-item {
+      padding: 14px 16px; border-bottom: 1px solid var(--line);
+      cursor: pointer; transition: background 0.12s;
+      display: flex; flex-direction: column; gap: 4px;
+    }
+    .conv-item:hover { background: rgba(108,99,255,0.06); }
+    .conv-item.active { background: rgba(108,99,255,0.12); border-left: 3px solid var(--indigo); }
+    .conv-user { font-size: 13px; font-weight: 600; color: var(--ink); display: flex; align-items: center; gap: 6px; }
+    .conv-user-id { font-family: monospace; font-size: 11px; color: var(--muted); }
+    .conv-preview { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .conv-time { font-size: 10px; color: var(--muted); margin-top: 2px; }
+    .unread-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--indigo); flex-shrink: 0; }
+    .sidebar-empty {
+      padding: 32px 16px; text-align: center; color: var(--muted);
+      font-size: 13px; line-height: 1.8;
+    }
+    .sidebar-empty-icon { font-size: 32px; margin-bottom: 8px; }
+
+    /* ── Chat panel ────────────────────────── */
+    .chat-panel {
+      flex: 1; display: flex; flex-direction: column; overflow: hidden;
+    }
+    .chat-header {
+      padding: 14px 20px; border-bottom: 1px solid var(--line);
+      background: var(--card); display: flex; align-items: center; gap: 12px;
+    }
+    .chat-header-avatar { font-size: 28px; }
+    .chat-header-name { font-size: 15px; font-weight: 700; }
+    .chat-header-sub { font-size: 11px; color: var(--muted); margin-top: 2px; }
+    .chat-empty-state {
+      flex: 1; display: flex; align-items: center; justify-content: center;
+      flex-direction: column; gap: 10px; color: var(--muted);
+    }
+    .chat-empty-icon { font-size: 48px; }
+    .chat-empty-title { font-size: 16px; font-weight: 600; color: var(--ink); }
+    .chat-empty-sub { font-size: 13px; }
+    .messages-area {
+      flex: 1; overflow-y: auto; padding: 16px;
+      display: flex; flex-direction: column; gap: 10px;
+    }
+    .msg-row { display: flex; align-items: flex-end; gap: 8px; }
+    .msg-row.user { justify-content: flex-end; }
+    .msg-row.advisor { justify-content: flex-start; }
+    .msg-avatar { font-size: 18px; flex-shrink: 0; }
+    .bubble {
+      max-width: 65%; padding: 10px 14px;
+      border-radius: 16px; font-size: 14px; line-height: 1.5;
+    }
+    .bubble.user {
+      background: var(--user-bubble); color: #fff;
+      border-bottom-right-radius: 4px;
+    }
+    .bubble.advisor {
+      background: var(--advisor-bubble); color: var(--ink);
+      border: 1px solid var(--line); border-bottom-left-radius: 4px;
+    }
+    .msg-time { font-size: 10px; color: var(--muted); margin-top: 3px; text-align: right; }
+    .msg-time.left { text-align: left; }
+
+    .input-area {
+      padding: 12px 16px; border-top: 1px solid var(--line);
+      background: var(--card); display: flex; gap: 10px; align-items: flex-end;
+    }
+    .reply-input {
+      flex: 1; background: var(--bg); border: 1.5px solid var(--line);
+      border-radius: 12px; padding: 10px 14px; color: var(--ink);
+      font-size: 14px; resize: none; min-height: 42px; max-height: 120px;
+      font-family: inherit; outline: none; line-height: 1.4;
+    }
+    .reply-input:focus { border-color: var(--indigo); }
+    .send-btn {
+      width: 42px; height: 42px; border-radius: 21px;
+      background: var(--indigo); border: none; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 18px; transition: opacity 0.15s; flex-shrink: 0;
+    }
+    .send-btn:hover { opacity: 0.85; }
+    .send-btn:disabled { background: var(--muted); opacity: 0.5; cursor: default; }
+    .disclaimer {
+      font-size: 10px; color: var(--muted); text-align: center;
+      padding: 4px 16px 8px; opacity: 0.7;
+    }
+    .loading-spinner {
+      display: inline-block; width: 16px; height: 16px;
+      border: 2px solid var(--line); border-top-color: var(--indigo);
+      border-radius: 50%; animation: spin 0.7s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+
+<!-- ── Login screen ── -->
+<div id="login-screen">
+  <div class="login-card">
+    <div class="login-logo">💼</div>
+    <div class="login-title">Advisor Portal</div>
+    <div class="login-sub">Enter your Advisor ID to see your conversations and respond to clients.</div>
+    <div>
+      <div class="login-label">Advisor ID</div>
+      <input id="advisor-id-input" class="login-input" type="text" placeholder="e.g. Jedpn7C1QscfuSNnFXl1" autocomplete="off" />
+    </div>
+    <div id="login-error" class="login-error">Advisor not found. Check your ID and try again.</div>
+    <button id="login-btn" class="login-btn">Sign In</button>
+    <div class="login-hint">
+      Your Advisor ID is the document ID in Firebase Firestore under the <strong>advisors</strong> collection.
+    </div>
+  </div>
+</div>
+
+<!-- ── App screen ── -->
+<div id="app-screen">
+  <div class="top-bar">
+    <div class="top-bar-left">
+      <span class="top-logo">💼</span>
+      <span class="top-title">Advisor Portal</span>
+      <span class="top-id" id="top-id-display"></span>
+    </div>
+    <div class="top-badge">
+      <div class="dot-live"></div>
+      <span id="advisor-name-display">Loading…</span>
+    </div>
+  </div>
+
+  <div class="main-layout">
+    <!-- Sidebar -->
+    <div class="sidebar">
+      <div class="sidebar-header">
+        <div class="sidebar-title">Conversations</div>
+        <div class="conv-count" id="conv-count">Loading…</div>
+      </div>
+      <div class="conv-list" id="conv-list">
+        <div class="sidebar-empty">
+          <div class="loading-spinner"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Chat panel -->
+    <div class="chat-panel" id="chat-panel">
+      <div class="chat-empty-state" id="chat-empty">
+        <div class="chat-empty-icon">💬</div>
+        <div class="chat-empty-title">Select a conversation</div>
+        <div class="chat-empty-sub">Choose a client from the list to start replying.</div>
+      </div>
+
+      <div id="chat-active" style="display:none; flex:1; flex-direction:column; overflow:hidden;">
+        <div class="chat-header">
+          <div class="chat-header-avatar">👤</div>
+          <div>
+            <div class="chat-header-name" id="chat-user-name">User</div>
+            <div class="chat-header-sub" id="chat-user-sub"></div>
+          </div>
+        </div>
+        <div class="messages-area" id="messages-area"></div>
+        <div class="input-area">
+          <textarea id="reply-input" class="reply-input" placeholder="Type your reply…" rows="1" maxlength="500"></textarea>
+          <button id="send-btn" class="send-btn" title="Send">➤</button>
+        </div>
+        <div class="disclaimer">You are responding as a verified advisor. Messages are stored securely in Firebase.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
+import {
+  getFirestore,
+  collection, doc, query, where, orderBy,
+  onSnapshot, addDoc, setDoc, getDoc, serverTimestamp
+} from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+
+const firebaseConfig = {
+  apiKey: "AIzaSyAzC0ivqFC0--upXdIkmqprM3TUOLk0yOk",
+  authDomain: "money-app-222d4.firebaseapp.com",
+  projectId: "money-app-222d4",
+  storageBucket: "money-app-222d4.firebasestorage.app",
+  messagingSenderId: "363914275206",
+  appId: "1:363914275206:web:c5c3e0a0bf5e243adf2407"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+
+// ── State ──────────────────────────────────────────────────────
+let currentAdvisorId = null;
+let currentAdvisorData = null;
+let activeConvId = null;
+let messagesUnsub = null;
+let convsUnsub = null;
+
+// ── DOM refs ───────────────────────────────────────────────────
+const loginScreen   = document.getElementById('login-screen');
+const appScreen     = document.getElementById('app-screen');
+const loginBtn      = document.getElementById('login-btn');
+const loginInput    = document.getElementById('advisor-id-input');
+const loginError    = document.getElementById('login-error');
+const topIdDisplay  = document.getElementById('top-id-display');
+const advisorNameEl = document.getElementById('advisor-name-display');
+const convList      = document.getElementById('conv-list');
+const convCount     = document.getElementById('conv-count');
+const chatEmpty     = document.getElementById('chat-empty');
+const chatActive    = document.getElementById('chat-active');
+const chatUserName  = document.getElementById('chat-user-name');
+const chatUserSub   = document.getElementById('chat-user-sub');
+const messagesArea  = document.getElementById('messages-area');
+const replyInput    = document.getElementById('reply-input');
+const sendBtn       = document.getElementById('send-btn');
+
+// ── Helpers ────────────────────────────────────────────────────
+function formatTime(ts) {
+  if (!ts) return '';
+  const d = ts.toDate ? ts.toDate() : new Date(ts);
+  const now = new Date();
+  const diff = now - d;
+  if (diff < 60000) return 'just now';
+  if (diff < 3600000) return `${Math.floor(diff/60000)}m ago`;
+  if (diff < 86400000) return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  return d.toLocaleDateString([], { month: 'short', day: 'numeric' });
+}
+
+function shortUserId(uid) {
+  return uid.slice(0, 8) + '…';
+}
+
+// ── Login ──────────────────────────────────────────────────────
+async function handleLogin() {
+  const advisorId = loginInput.value.trim();
+  if (!advisorId) return;
+
+  loginBtn.disabled = true;
+  loginBtn.textContent = 'Signing in…';
+  loginError.style.display = 'none';
+
+  try {
+    const snap = await getDoc(doc(db, 'advisors', advisorId));
+    if (!snap.exists()) {
+      loginError.style.display = 'block';
+      loginBtn.disabled = false;
+      loginBtn.textContent = 'Sign In';
+      return;
+    }
+    currentAdvisorId = advisorId;
+    currentAdvisorData = snap.data();
+
+    // Show app
+    loginScreen.style.display = 'none';
+    appScreen.style.display = 'flex';
+    topIdDisplay.textContent = advisorId.slice(0, 12) + '…';
+    advisorNameEl.textContent = currentAdvisorData.name + ' — Online';
+
+    subscribeToConversations();
+  } catch (e) {
+    loginError.textContent = 'Error: ' + e.message;
+    loginError.style.display = 'block';
+    loginBtn.disabled = false;
+    loginBtn.textContent = 'Sign In';
+  }
+}
+
+loginBtn.addEventListener('click', handleLogin);
+loginInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') handleLogin(); });
+
+// ── Conversation list ──────────────────────────────────────────
+function subscribeToConversations() {
+  const q = query(
+    collection(db, 'chats'),
+    where('advisorId', '==', currentAdvisorId)
+  );
+
+  convsUnsub = onSnapshot(q, (snap) => {
+    const convs = snap.docs
+      .map(d => ({ id: d.id, ...d.data() }))
+      .sort((a, b) => {
+        const ta = a.updatedAt?.toMillis?.() ?? 0;
+        const tb = b.updatedAt?.toMillis?.() ?? 0;
+        return tb - ta;
+      });
+    renderConvList(convs);
+  }, (err) => {
+    convList.innerHTML = `<div class="sidebar-empty" style="color:var(--clay)">Failed to load: ${err.message}</div>`;
+  });
+}
+
+let convData = [];
+function renderConvList(convs) {
+  convData = convs;
+  convCount.textContent = `${convs.length} client${convs.length !== 1 ? 's' : ''}`;
+
+  if (convs.length === 0) {
+    convList.innerHTML = `
+      <div class="sidebar-empty">
+        <div class="sidebar-empty-icon">📭</div>
+        No conversations yet.<br>Clients will appear here once they send you a message.
+      </div>`;
+    return;
+  }
+
+  convList.innerHTML = convs.map(conv => {
+    const uid = conv.userId || conv.id.split('_')[0];
+    const isActive = conv.id === activeConvId;
+    const time = formatTime(conv.updatedAt);
+    return `
+      <div class="conv-item ${isActive ? 'active' : ''}" data-id="${conv.id}" data-uid="${uid}">
+        <div class="conv-user">
+          <span>👤 Client</span>
+          <span class="conv-user-id">${shortUserId(uid)}</span>
+        </div>
+        <div class="conv-preview">${time ? 'Last message ' + time : 'New conversation'}</div>
+      </div>`;
+  }).join('');
+
+  convList.querySelectorAll('.conv-item').forEach(el => {
+    el.addEventListener('click', () => openConversation(el.dataset.id, el.dataset.uid));
+  });
+}
+
+// ── Open conversation ──────────────────────────────────────────
+function openConversation(convId, userId) {
+  activeConvId = convId;
+
+  // Update sidebar highlight
+  convList.querySelectorAll('.conv-item').forEach(el => {
+    el.classList.toggle('active', el.dataset.id === convId);
+  });
+
+  chatEmpty.style.display = 'none';
+  chatActive.style.display = 'flex';
+  chatUserName.textContent = 'Client';
+  chatUserSub.textContent = 'User ID: ' + userId;
+
+  // Unsubscribe previous
+  if (messagesUnsub) messagesUnsub();
+
+  messagesArea.innerHTML = '<div style="text-align:center;color:var(--muted);padding:20px"><div class="loading-spinner"></div></div>';
+
+  const q = query(
+    collection(db, 'chats', convId, 'messages'),
+    orderBy('timestamp', 'asc')
+  );
+
+  messagesUnsub = onSnapshot(q, (snap) => {
+    const msgs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    renderMessages(msgs);
+  });
+}
+
+// ── Render messages ────────────────────────────────────────────
+function renderMessages(msgs) {
+  const advisorAvatar = currentAdvisorData?.avatar || '🧑‍💼';
+  const wasAtBottom = messagesArea.scrollHeight - messagesArea.scrollTop - messagesArea.clientHeight < 60;
+
+  messagesArea.innerHTML = msgs.length === 0
+    ? '<div style="text-align:center;color:var(--muted);padding:40px;font-size:13px">No messages yet. The client hasn\'t written yet.</div>'
+    : msgs.map(msg => {
+        const isAdvisor = msg.sender === 'advisor';
+        const time = formatTime(msg.timestamp);
+        if (isAdvisor) {
+          return `
+            <div class="msg-row advisor">
+              <span class="msg-avatar">${advisorAvatar}</span>
+              <div>
+                <div class="bubble advisor">${escapeHtml(msg.text)}</div>
+                <div class="msg-time left">${time}</div>
+              </div>
+            </div>`;
+        } else {
+          return `
+            <div class="msg-row user">
+              <div>
+                <div class="bubble user">${escapeHtml(msg.text)}</div>
+                <div class="msg-time">${time}</div>
+              </div>
+            </div>`;
+        }
+      }).join('');
+
+  if (wasAtBottom || msgs.length <= 3) {
+    messagesArea.scrollTop = messagesArea.scrollHeight;
+  }
+}
+
+function escapeHtml(str) {
+  return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ── Send reply ─────────────────────────────────────────────────
+async function sendReply() {
+  const text = replyInput.value.trim();
+  if (!text || !activeConvId) return;
+
+  sendBtn.disabled = true;
+  replyInput.value = '';
+
+  try {
+    // Update chat doc timestamp
+    await setDoc(doc(db, 'chats', activeConvId), { updatedAt: serverTimestamp() }, { merge: true });
+    // Add message
+    await addDoc(collection(db, 'chats', activeConvId, 'messages'), {
+      text,
+      sender: 'advisor',
+      timestamp: serverTimestamp(),
+    });
+  } catch (e) {
+    replyInput.value = text; // restore on failure
+    alert('Failed to send: ' + e.message);
+  } finally {
+    sendBtn.disabled = false;
+    replyInput.focus();
+  }
+}
+
+sendBtn.addEventListener('click', sendReply);
+replyInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    sendReply();
+  }
+});
+
+// Auto-resize textarea
+replyInput.addEventListener('input', () => {
+  replyInput.style.height = 'auto';
+  replyInput.style.height = Math.min(replyInput.scrollHeight, 120) + 'px';
+});
+</script>
+</body>
+</html>
