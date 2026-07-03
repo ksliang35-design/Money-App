@@ -20,7 +20,8 @@ import {
   type ModelOptions,
 } from '@/lib/coach';
 import { useT } from '@/i18n';
-import { useAppData } from '@/store/AppDataProvider';
+import { useAppData, type DerivedData } from '@/store/AppDataProvider';
+import { type ExpenseCategory } from '@/constants/mock-data';
 import { subscribeToAdvisors, type Advisor } from '@/lib/advisors';
 import { ChatScreen } from '@/components/chat-screen';
 
@@ -138,6 +139,62 @@ const MONEY_WISDOM_CARDS: MoneyWisdomCard[] = [
   },
 ];
 
+interface HabitProgress {
+  status: 'ok' | 'warn' | 'none';
+  text: string;
+  pct: number | null; // 0–100 for the progress bar, null = no bar
+}
+
+const NO_HABIT_DATA: HabitProgress = {
+  status: 'none',
+  text: 'Add income/expenses to track this habit',
+  pct: null,
+};
+
+function getHabitProgress(
+  id: string,
+  data: DerivedData,
+  catLabels: Record<ExpenseCategory, string>,
+): HabitProgress {
+  if (id === 'behavior-beats-math') {
+    if (data.income <= 0) return NO_HABIT_DATA;
+    const target = data.income * 0.1;
+    const ok = data.net >= target;
+    return {
+      status: ok ? 'ok' : 'warn',
+      text: `Saved ${fmt(data.net)} this month vs 10% target ${fmt(target)}`,
+      pct: target > 0 ? (data.net / target) * 100 : 0,
+    };
+  }
+
+  if (id === 'keep-investing-simple') {
+    if (data.income <= 0 && data.expense <= 0) return NO_HABIT_DATA;
+    const gap = data.net;
+    const ok = gap > 0;
+    return {
+      status: ok ? 'ok' : 'warn',
+      text: ok
+        ? `${fmt(gap)} gap available to invest this month`
+        : `Spending exceeds income by ${fmt(Math.abs(gap))}`,
+      pct: data.income > 0 ? (gap / data.income) * 100 : 0,
+    };
+  }
+
+  if (id === 'money-is-life-energy') {
+    if (data.byCategoryArray.length === 0) return NO_HABIT_DATA;
+    const top = data.byCategoryArray[0];
+    const share = data.expense > 0 ? (top.amt / data.expense) * 100 : 0;
+    const ok = share < 30;
+    return {
+      status: ok ? 'ok' : 'warn',
+      text: `Top category: ${catLabels[top.cat]} — ${fmt(top.amt)} (${Math.round(share)}% of spending)`,
+      pct: share,
+    };
+  }
+
+  return NO_HABIT_DATA;
+}
+
 function incomeToBracket(income: number): string {
   const match = INCOME_BRACKETS.find((b) => income >= b.min && income < b.max);
   return match?.label ?? INCOME_BRACKETS[INCOME_BRACKETS.length - 1].label;
@@ -169,6 +226,17 @@ export default function CoachScreen() {
   const [advisors, setAdvisors] = useState<Advisor[]>([]);
   const [advisorsLoading, setAdvisorsLoading] = useState(true);
   const [activeHabits, setActiveHabits] = useState<ActiveHabit[]>([]);
+
+  const habitCatLabels: Record<ExpenseCategory, string> = {
+    food:          t('expenses.categoryFood'),
+    transport:     t('expenses.categoryTransport'),
+    shopping:      t('expenses.categoryShopping'),
+    bills:         t('expenses.categoryBills'),
+    entertainment: t('expenses.categoryEntertainment'),
+    health:        t('expenses.categoryHealth'),
+    education:     t('expenses.categoryEducation'),
+    other:         t('expenses.categoryOther'),
+  };
 
   useEffect(() => {
     const unsub = subscribeToAdvisors((list) => {
@@ -811,16 +879,35 @@ export default function CoachScreen() {
         {activeHabits.length > 0 && (
           <View style={styles.habitsCard}>
             <Text style={styles.habitsTitle}>My Active Habits</Text>
-            {activeHabits.map((habit) => (
-              <View key={habit.id} style={styles.habitRow}>
-                <Text style={styles.habitRowText} numberOfLines={1}>{habit.title}</Text>
-                <Pressable
-                  onPress={() => removeHabit(habit.id)}
-                  style={({ pressed }) => [styles.habitRemoveBtn, pressed && { opacity: 0.6 }]}>
-                  <Text style={styles.habitRemoveTxt}>✗</Text>
-                </Pressable>
-              </View>
-            ))}
+            {activeHabits.map((habit) => {
+              const progress = getHabitProgress(habit.id, data, habitCatLabels);
+              return (
+                <View key={habit.id} style={styles.habitRow}>
+                  <View style={styles.habitRowTop}>
+                    <Text style={styles.habitRowText} numberOfLines={1}>{habit.title}</Text>
+                    <Pressable
+                      onPress={() => removeHabit(habit.id)}
+                      style={({ pressed }) => [styles.habitRemoveBtn, pressed && { opacity: 0.6 }]}>
+                      <Text style={styles.habitRemoveTxt}>✗</Text>
+                    </Pressable>
+                  </View>
+                  <View style={styles.habitProgressRow}>
+                    <Text style={styles.habitProgressIcon}>
+                      {progress.status === 'ok' ? '✓' : progress.status === 'warn' ? '⚠️' : 'ℹ️'}
+                    </Text>
+                    <Text style={styles.habitProgressText} numberOfLines={2}>{progress.text}</Text>
+                  </View>
+                  {progress.pct !== null && (
+                    <ProgressBar
+                      value={progress.pct}
+                      color={progress.status === 'warn' ? C.clay : C.emerald}
+                      height={5}
+                      style={styles.habitProgressBar}
+                    />
+                  )}
+                </View>
+              );
+            })}
           </View>
         )}
 
@@ -1390,12 +1477,15 @@ function makeStyles(C: AppTheme) {
       marginBottom: MS.xs,
     },
     habitRow: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'center',
       paddingVertical: MS.sm,
       borderTopWidth: 1,
       borderTopColor: C.line,
+      gap: MS.xs,
+    },
+    habitRowTop: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
     },
     habitRowText: { flex: 1, fontSize: 13, fontFamily: MF.semiBold, color: C.ink, marginRight: MS.sm },
     habitRemoveBtn: {
@@ -1407,5 +1497,9 @@ function makeStyles(C: AppTheme) {
       backgroundColor: C.line,
     },
     habitRemoveTxt: { fontSize: 12, fontFamily: MF.bold, color: C.muted },
+    habitProgressRow: { flexDirection: 'row', alignItems: 'flex-start', gap: MS.xs },
+    habitProgressIcon: { fontSize: 12, lineHeight: 16 },
+    habitProgressText: { flex: 1, fontSize: 11, fontFamily: MF.regular, color: C.muted, lineHeight: 16 },
+    habitProgressBar: { marginTop: 2 },
   });
 }
