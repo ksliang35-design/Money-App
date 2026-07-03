@@ -143,6 +143,7 @@ interface HabitProgress {
   status: 'ok' | 'warn' | 'none';
   text: string;
   pct: number | null; // 0–100 for the progress bar, null = no bar
+  detail?: string;    // secondary guideline/cross-reference line
 }
 
 const NO_HABIT_DATA: HabitProgress = {
@@ -151,48 +152,87 @@ const NO_HABIT_DATA: HabitProgress = {
   pct: null,
 };
 
-function getHabitProgress(
-  id: string,
-  data: DerivedData,
-  catLabels: Record<ExpenseCategory, string>,
-): HabitProgress {
+// Same needs/wants grouping computeActualRM() in lib/coach.ts uses for the budget-split
+// buckets — reused here so the 50/30/20 read-out matches the Coach plan's own math.
+const NEEDS_CATEGORIES: ExpenseCategory[] = ['food', 'transport', 'bills', 'health', 'other', 'education'];
+const WANTS_CATEGORIES: ExpenseCategory[] = ['shopping', 'entertainment'];
+
+function getHabitProgress(id: string, data: DerivedData): HabitProgress {
   if (id === 'behavior-beats-math') {
     if (data.income <= 0) return NO_HABIT_DATA;
     const target = data.income * 0.1;
     const ok = data.net >= target;
+    const goals = data.goals ?? [];
+    const goalSaved = goals.reduce((s, g) => s + g.saved, 0);
+    const goalTarget = goals.reduce((s, g) => s + g.target, 0);
+    const goalDetail = goals.length > 0
+      ? `Goals: ${fmt(goalSaved)} / ${fmt(goalTarget)} saved (${goalTarget > 0 ? Math.round((goalSaved / goalTarget) * 100) : 0}%)`
+      : 'Pay-yourself-first: save 10–20% before spending';
     return {
       status: ok ? 'ok' : 'warn',
       text: `Saved ${fmt(data.net)} this month vs 10% target ${fmt(target)}`,
       pct: target > 0 ? (data.net / target) * 100 : 0,
+      detail: goalDetail,
     };
   }
 
   if (id === 'keep-investing-simple') {
     if (data.income <= 0 && data.expense <= 0) return NO_HABIT_DATA;
+    const goals = data.goals ?? [];
+    const emergencyGoal = goals.find((g) => g.label.toLowerCase().includes('emergency'));
+    const bufferRM = emergencyGoal ? emergencyGoal.saved : goals.reduce((s, g) => s + g.saved, 0);
+    const monthsCovered = data.expense > 0 ? bufferRM / data.expense : 0;
     const gap = data.net;
-    const ok = gap > 0;
+    const ok = monthsCovered >= 3;
     return {
       status: ok ? 'ok' : 'warn',
       text: ok
-        ? `${fmt(gap)} gap available to invest this month`
-        : `Spending exceeds income by ${fmt(Math.abs(gap))}`,
-      pct: data.income > 0 ? (gap / data.income) * 100 : 0,
+        ? `Emergency buffer covers ${monthsCovered.toFixed(1)} months — ${fmt(gap)} gap free to invest`
+        : `Buffer covers ${monthsCovered.toFixed(1)} of 3 months — build this before investing the ${fmt(Math.max(0, gap))} gap`,
+      pct: Math.min(100, (monthsCovered / 3) * 100),
+      detail: 'Guideline: build 3–6 months of expenses before other investing',
     };
   }
 
   if (id === 'money-is-life-energy') {
-    if (data.byCategoryArray.length === 0) return NO_HABIT_DATA;
-    const top = data.byCategoryArray[0];
-    const share = data.expense > 0 ? (top.amt / data.expense) * 100 : 0;
-    const ok = share < 30;
+    if (data.income <= 0) return NO_HABIT_DATA;
+    const needsAmt = NEEDS_CATEGORIES.reduce((s, c) => s + (data.byCategory[c] ?? 0), 0);
+    const wantsAmt = WANTS_CATEGORIES.reduce((s, c) => s + (data.byCategory[c] ?? 0), 0);
+    const savingsAmt = Math.max(0, data.net);
+    const needsPct = (needsAmt / data.income) * 100;
+    const wantsPct = (wantsAmt / data.income) * 100;
+    const savingsPct = (savingsAmt / data.income) * 100;
+    const ok = needsPct <= 50 && wantsPct <= 30 && savingsPct >= 20;
+    const overBucket = wantsPct > 30
+      ? `Wants are ${Math.round(wantsPct - 30)}pt over budget`
+      : needsPct > 50
+        ? `Needs are ${Math.round(needsPct - 50)}pt over budget`
+        : savingsPct < 20
+          ? `Savings are ${Math.round(20 - savingsPct)}pt under target`
+          : 'On track with the 50/30/20 rule';
     return {
       status: ok ? 'ok' : 'warn',
-      text: `Top category: ${catLabels[top.cat]} — ${fmt(top.amt)} (${Math.round(share)}% of spending)`,
-      pct: share,
+      text: `Needs ${Math.round(needsPct)}% · Wants ${Math.round(wantsPct)}% · Savings ${Math.round(savingsPct)}%`,
+      pct: savingsPct,
+      detail: `Benchmark 50/30/20 — ${overBucket}`,
     };
   }
 
   return NO_HABIT_DATA;
+}
+
+// Modest cross-month trend (not "annual" — monthlyRecords typically holds only a few
+// archived months, so we compare against whatever history actually exists).
+function getSavingsTrend(data: DerivedData): string | null {
+  const records = data.monthlyRecords ?? [];
+  if (records.length === 0) return null;
+  const oldest = records[records.length - 1];
+  const oldestRate = oldest.income > 0 ? Math.round((oldest.net / oldest.income) * 100) : 0;
+  const currentRate = data.savingsRate;
+  const diff = currentRate - oldestRate;
+  if (diff === 0) return `Savings rate steady at ${currentRate}% since ${oldest.month}`;
+  const dir = diff > 0 ? 'up' : 'down';
+  return `Savings rate ${dir} from ${oldestRate}% (${oldest.month}) to ${currentRate}% now`;
 }
 
 function incomeToBracket(income: number): string {
@@ -226,17 +266,7 @@ export default function CoachScreen() {
   const [advisors, setAdvisors] = useState<Advisor[]>([]);
   const [advisorsLoading, setAdvisorsLoading] = useState(true);
   const [activeHabits, setActiveHabits] = useState<ActiveHabit[]>([]);
-
-  const habitCatLabels: Record<ExpenseCategory, string> = {
-    food:          t('expenses.categoryFood'),
-    transport:     t('expenses.categoryTransport'),
-    shopping:      t('expenses.categoryShopping'),
-    bills:         t('expenses.categoryBills'),
-    entertainment: t('expenses.categoryEntertainment'),
-    health:        t('expenses.categoryHealth'),
-    education:     t('expenses.categoryEducation'),
-    other:         t('expenses.categoryOther'),
-  };
+  const savingsTrend = getSavingsTrend(data);
 
   useEffect(() => {
     const unsub = subscribeToAdvisors((list) => {
@@ -879,8 +909,9 @@ export default function CoachScreen() {
         {activeHabits.length > 0 && (
           <View style={styles.habitsCard}>
             <Text style={styles.habitsTitle}>My Active Habits</Text>
+            {savingsTrend && <Text style={styles.habitsTrend}>{savingsTrend}</Text>}
             {activeHabits.map((habit) => {
-              const progress = getHabitProgress(habit.id, data, habitCatLabels);
+              const progress = getHabitProgress(habit.id, data);
               return (
                 <View key={habit.id} style={styles.habitRow}>
                   <View style={styles.habitRowTop}>
@@ -904,6 +935,9 @@ export default function CoachScreen() {
                       height={5}
                       style={styles.habitProgressBar}
                     />
+                  )}
+                  {progress.detail && (
+                    <Text style={styles.habitDetailText} numberOfLines={2}>{progress.detail}</Text>
                   )}
                 </View>
               );
@@ -1476,6 +1510,12 @@ function makeStyles(C: AppTheme) {
       letterSpacing: 0.5,
       marginBottom: MS.xs,
     },
+    habitsTrend: {
+      fontSize: 12,
+      fontFamily: MF.medium,
+      color: C.emerald,
+      marginBottom: MS.xs,
+    },
     habitRow: {
       paddingVertical: MS.sm,
       borderTopWidth: 1,
@@ -1501,5 +1541,6 @@ function makeStyles(C: AppTheme) {
     habitProgressIcon: { fontSize: 12, lineHeight: 16 },
     habitProgressText: { flex: 1, fontSize: 11, fontFamily: MF.regular, color: C.muted, lineHeight: 16 },
     habitProgressBar: { marginTop: 2 },
+    habitDetailText: { fontSize: 10, fontFamily: MF.regular, color: C.muted, fontStyle: 'italic' },
   });
 }
