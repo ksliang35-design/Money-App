@@ -235,6 +235,43 @@ function getSavingsTrend(data: DerivedData): string | null {
   return `Savings rate ${dir} from ${oldestRate}% (${oldest.month}) to ${currentRate}% now`;
 }
 
+interface HabitsSummary {
+  onTrack: number;
+  total: number;
+  pct: number;
+  status: 'all-ok' | 'mixed' | 'all-warn' | 'no-data';
+  message: string;
+}
+
+// Rolls up each active habit's own getHabitProgress() status into a single
+// on-track ratio. Uses onTrack/total for the bar (not an average of per-habit
+// pct values, since those measure different things per habit).
+function getHabitsSummary(activeHabits: ActiveHabit[], data: DerivedData): HabitsSummary | null {
+  if (activeHabits.length === 0) return null;
+  const statuses = activeHabits.map((h) => getHabitProgress(h.id, data).status);
+  const total = statuses.length;
+  const onTrack = statuses.filter((s) => s === 'ok').length;
+  const needsWork = statuses.filter((s) => s === 'warn').length;
+  const noData = statuses.filter((s) => s === 'none').length;
+
+  if (noData === total) {
+    return { onTrack, total, pct: 0, status: 'no-data', message: 'Add income & expenses to start tracking these habits' };
+  }
+  if (onTrack === total) {
+    return { onTrack, total, pct: 100, status: 'all-ok', message: 'Nice — every habit is on track this month' };
+  }
+  if (onTrack === 0) {
+    return { onTrack, total, pct: 0, status: 'all-warn', message: 'None on track yet — check the tips below to catch up' };
+  }
+  return {
+    onTrack,
+    total,
+    pct: (onTrack / total) * 100,
+    status: 'mixed',
+    message: `${needsWork} habit${needsWork === 1 ? '' : 's'} need${needsWork === 1 ? 's' : ''} attention — see details below`,
+  };
+}
+
 function incomeToBracket(income: number): string {
   const match = INCOME_BRACKETS.find((b) => income >= b.min && income < b.max);
   return match?.label ?? INCOME_BRACKETS[INCOME_BRACKETS.length - 1].label;
@@ -267,6 +304,7 @@ export default function CoachScreen() {
   const [advisorsLoading, setAdvisorsLoading] = useState(true);
   const [activeHabits, setActiveHabits] = useState<ActiveHabit[]>([]);
   const savingsTrend = getSavingsTrend(data);
+  const habitsSummary = getHabitsSummary(activeHabits, data);
 
   useEffect(() => {
     const unsub = subscribeToAdvisors((list) => {
@@ -909,6 +947,29 @@ export default function CoachScreen() {
         {activeHabits.length > 0 && (
           <View style={styles.habitsCard}>
             <Text style={styles.habitsTitle}>My Active Habits</Text>
+            {habitsSummary && (
+              <View style={styles.habitsSummaryBox}>
+                <View style={styles.habitsSummaryTop}>
+                  <Text style={styles.habitsSummaryLabel}>Overall Progress</Text>
+                  <Text style={styles.habitsSummaryRatio}>{habitsSummary.onTrack}/{habitsSummary.total} on track</Text>
+                </View>
+                <ProgressBar
+                  value={habitsSummary.pct}
+                  color={
+                    habitsSummary.status === 'all-ok'
+                      ? C.emerald
+                      : habitsSummary.status === 'mixed'
+                        ? C.gold
+                        : habitsSummary.status === 'no-data'
+                          ? C.muted
+                          : C.clay
+                  }
+                  height={6}
+                  style={styles.habitsSummaryBar}
+                />
+                <Text style={styles.habitsSummaryText}>{habitsSummary.message}</Text>
+              </View>
+            )}
             {savingsTrend && <Text style={styles.habitsTrend}>{savingsTrend}</Text>}
             {activeHabits.map((habit) => {
               const progress = getHabitProgress(habit.id, data);
@@ -1516,6 +1577,26 @@ function makeStyles(C: AppTheme) {
       color: C.emerald,
       marginBottom: MS.xs,
     },
+    habitsSummaryBox: {
+      backgroundColor: C.goldLight,
+      borderWidth: 1,
+      borderColor: C.goldBorder,
+      borderRadius: MR.lg,
+      padding: MS.md,
+      gap: MS.xs,
+      marginBottom: MS.xs,
+    },
+    habitsSummaryTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+    habitsSummaryLabel: {
+      fontSize: 10,
+      fontFamily: MF.bold,
+      color: C.goldText,
+      textTransform: 'uppercase',
+      letterSpacing: 0.6,
+    },
+    habitsSummaryRatio: { fontSize: 13, fontFamily: MF.semiBold, color: C.ink },
+    habitsSummaryBar: { marginTop: 2 },
+    habitsSummaryText: { fontSize: 11, fontFamily: MF.regular, color: C.muted, lineHeight: 16, marginTop: 2 },
     habitRow: {
       paddingVertical: MS.sm,
       borderTopWidth: 1,
