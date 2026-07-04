@@ -432,5 +432,11 @@ export const zh: TranslationShape = {
     goalPlan: '目标规划',
     noKey: '🔑 API 密钥未设置。请在 .env 文件中添加 EXPO_PUBLIC_GEMINI_API_KEY 并重启服务器。',
     errorPrefix: '抱歉，暂时无法获取回复。',
+    statusSpending: '正在查看你的消费…',
+    statusReminder: '正在设置提醒…',
+    statusThinking: '思考中…',
+    confirmActionTitle: '助手想要：{action}',
+    allow: '允许',
+    deny: '拒绝',
   },
 };

@@ -31,7 +31,7 @@ interface Props {
 export function MoneyAIOverlay({ visible, onClose }: Props) {
   const insets = useSafeAreaInsets();
   const scrollRef = useRef<ScrollView>(null);
-  const { data } = useAppData();
+  const { data, addBill } = useAppData();
   const t = useT();
   const C = useTheme();
   const styles = useMemo(() => makeStyles(C), [C]);
@@ -49,6 +49,29 @@ export function MoneyAIOverlay({ visible, onClose }: Props) {
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [confirm, setConfirm] = useState<PendingAction | null>(null);
+  const [agentStatus, setAgentStatus] = useState<string | null>(null);
+  const [pendingToolConfirm, setPendingToolConfirm] = useState<{
+    label: string;
+    description: string;
+    resolve: (v: boolean) => void;
+  } | null>(null);
+
+  const STATUS_LABELS: Record<string, string> = {
+    getSpendingByCategory: t('ai.statusSpending'),
+    createReminder: t('ai.statusReminder'),
+  };
+
+  function confirmAction(label: string, description: string): Promise<boolean> {
+    return new Promise((resolve) => setPendingToolConfirm({ label, description, resolve }));
+  }
+
+  function handleClose() {
+    if (pendingToolConfirm) {
+      pendingToolConfirm.resolve(false);
+      setPendingToolConfirm(null);
+    }
+    onClose();
+  }
 
   async function send(q: string) {
     if (!q.trim() || loading) return;
@@ -57,6 +80,7 @@ export function MoneyAIOverlay({ visible, onClose }: Props) {
     setMessages((m) => [...m, userMsg]);
     setInput('');
     setLoading(true);
+    setAgentStatus(null);
     setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 50);
 
     try {
@@ -87,6 +111,13 @@ export function MoneyAIOverlay({ visible, onClose }: Props) {
         },
         goalsText,
         history,
+        {
+          month: data.month,
+          monthlyRecords: data.monthlyRecords,
+          addBill,
+          onStatus: (toolName) => setAgentStatus(STATUS_LABELS[toolName] ?? t('ai.statusThinking')),
+          confirmAction,
+        },
       );
 
       const aiMsg: Message = { role: 'ai', text: reply.text, action: reply.action ?? undefined };
@@ -105,12 +136,13 @@ export function MoneyAIOverlay({ visible, onClose }: Props) {
       ]);
     } finally {
       setLoading(false);
+      setAgentStatus(null);
       setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 100);
     }
   }
 
   return (
-    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
+    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={handleClose}>
       <View style={[styles.container, { paddingTop: insets.top || 16 }]}>
         {/* Header */}
         <View style={styles.header}>
@@ -121,7 +153,7 @@ export function MoneyAIOverlay({ visible, onClose }: Props) {
               <Text style={styles.headerSub}>{t('ai.sub')}</Text>
             </View>
           </View>
-          <Pressable onPress={onClose} style={styles.closeBtn}>
+          <Pressable onPress={handleClose} style={styles.closeBtn}>
             <Text style={styles.closeBtnText}>✕</Text>
           </Pressable>
         </View>
@@ -148,6 +180,7 @@ export function MoneyAIOverlay({ visible, onClose }: Props) {
               <View style={[styles.bubble, styles.bubbleAI]}>
                 <Text style={styles.bubbleWho}>♞ Money AI</Text>
                 <ActivityIndicator size="small" color={C.emerald} style={{ marginTop: 2 }} />
+                {!!agentStatus && <Text style={styles.statusText}>{agentStatus}</Text>}
               </View>
             )}
           </ScrollView>
@@ -219,6 +252,36 @@ export function MoneyAIOverlay({ visible, onClose }: Props) {
             </View>
           </View>
         )}
+
+        {/* Real tool-gate confirm dialog — separate from the (now dormant) cosmetic one above */}
+        {pendingToolConfirm && (
+          <View style={styles.confirmBackdrop}>
+            <View style={styles.confirmCard}>
+              <Text style={styles.confirmTitle}>
+                {t('ai.confirmActionTitle', { action: pendingToolConfirm.label })}
+              </Text>
+              <Text style={styles.confirmDesc}>{pendingToolConfirm.description}</Text>
+              <View style={styles.confirmBtns}>
+                <Pressable
+                  style={styles.confirmNot}
+                  onPress={() => {
+                    pendingToolConfirm.resolve(false);
+                    setPendingToolConfirm(null);
+                  }}>
+                  <Text style={styles.confirmNotText}>{t('ai.deny')}</Text>
+                </Pressable>
+                <Pressable
+                  style={styles.confirmOk}
+                  onPress={() => {
+                    pendingToolConfirm.resolve(true);
+                    setPendingToolConfirm(null);
+                  }}>
+                  <Text style={styles.confirmOkText}>{t('ai.allow')}</Text>
+                </Pressable>
+              </View>
+            </View>
+          </View>
+        )}
       </View>
     </Modal>
   );
@@ -265,6 +328,7 @@ function makeStyles(C: AppTheme) {
       alignSelf: 'flex-end',
     },
     bubbleWho: { fontSize: 10, fontFamily: MF.bold, color: C.emeraldDark, marginBottom: 3 },
+    statusText: { fontSize: 12, fontFamily: MF.regular, color: C.muted, marginTop: 4, fontStyle: 'italic' },
     bubbleText: { fontSize: 13.5, fontFamily: MF.regular, color: C.ink, lineHeight: 20 },
     bubbleTextUser: { color: '#fff' },
     quickScroll: { flexShrink: 0 },

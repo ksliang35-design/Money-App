@@ -430,6 +430,12 @@ export const en = {
     goalPlan: 'Goal plan',
     noKey: '🔑 API key not set. Add EXPO_PUBLIC_GEMINI_API_KEY to your .env file and restart the server.',
     errorPrefix: 'Sorry, I couldn\'t get a response right now. ',
+    statusSpending: 'Checking your spending…',
+    statusReminder: 'Setting up your reminder…',
+    statusThinking: 'Thinking…',
+    confirmActionTitle: 'Agent wants to: {action}',
+    allow: 'Allow',
+    deny: 'Deny',
   },
 } as const;
 

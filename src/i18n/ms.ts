@@ -432,5 +432,11 @@ export const ms: TranslationShape = {
     goalPlan: 'Pelan matlamat',
     noKey: '🔑 Kunci API tidak ditetapkan. Tambah EXPO_PUBLIC_GEMINI_API_KEY ke fail .env dan mulakan semula pelayan.',
     errorPrefix: 'Maaf, saya tidak dapat sambutan buat masa ini. ',
+    statusSpending: 'Menyemak perbelanjaan anda…',
+    statusReminder: 'Menyediakan peringatan anda…',
+    statusThinking: 'Sedang berfikir…',
+    confirmActionTitle: 'Agen ingin: {action}',
+    allow: 'Benarkan',
+    deny: 'Tolak',
   },
 };
