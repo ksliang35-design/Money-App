@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { GoalEditModal, type GoalModalMode } from '@/components/goal-edit-modal';
 import { HoldingEditModal, type HoldingModalMode } from '@/components/holding-edit-modal';
+import { TabAgentOverlay } from '@/components/tab-agent-overlay';
 import { Card } from '@/components/ui/Card';
 import { HeroCard } from '@/components/ui/HeroCard';
 import { ProgressBar } from '@/components/ui/ProgressBar';
@@ -16,6 +17,7 @@ import { type AppTheme } from '@/constants/theme';
 import { useTheme } from '@/hooks/useTheme';
 import { type AssetType, type Goal, type Holding, type HoldingCurrency, type FxRates } from '@/constants/mock-data';
 import { useT } from '@/i18n';
+import { investAgentConfig } from '@/lib/agents/invest-agent';
 import { convertCcy, fmtCcy } from '@/lib/fx';
 import { fetchFxRates, fetchCryptoPrices } from '@/lib/live-prices';
 import { useAppData } from '@/store/AppDataProvider';
@@ -319,6 +321,7 @@ export default function InvestScreen() {
   const [fetching, setFetching] = useState(false);
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [fxOpen, setFxOpen] = useState(false);
+  const [aiOpen, setAiOpen] = useState(false);
   const autoFetchedRef = useRef(false);
 
   const holdings = data.holdings ?? [];
@@ -395,9 +398,14 @@ export default function InvestScreen() {
         showsVerticalScrollIndicator={false}>
 
         {/* Header */}
-        <View>
-          <Text style={styles.screenTitle}>{t('invest.title')}</Text>
-          <Text style={styles.screenSub}>{t('invest.sub')}</Text>
+        <View style={styles.headerRow}>
+          <View>
+            <Text style={styles.screenTitle}>{t('invest.title')}</Text>
+            <Text style={styles.screenSub}>{t('invest.sub')}</Text>
+          </View>
+          <Pressable style={styles.aiBadge} onPress={() => setAiOpen(true)}>
+            <Text style={styles.aiBadgeGlyph}>📈</Text>
+          </Pressable>
         </View>
 
         {/* Tab switcher */}
@@ -611,6 +619,22 @@ export default function InvestScreen() {
 
       <GoalEditModal mode={goalMode} onClose={() => setGoalMode(null)} />
       <HoldingEditModal mode={holdingMode} onClose={() => setHoldingMode(null)} />
+
+      <TabAgentOverlay
+        config={investAgentConfig}
+        visible={aiOpen}
+        onClose={() => setAiOpen(false)}
+        userName={data.name}
+        data={{
+          holdings,
+          goals: data.goals,
+          portfolioValueDisplay,
+          displayCurrency: displayCcy,
+          fxRates,
+          pricesUpdatedAt: data.pricesUpdatedAt,
+        }}
+        ops={{}}
+      />
     </View>
   );
 }
@@ -621,8 +645,15 @@ function makeStyles(C: AppTheme) {
     scroll: { flex: 1 },
     content: { padding: MS.lg, gap: MS.md },
 
+    headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
     screenTitle: { fontSize: 26, fontFamily: MF.bold, color: C.ink },
     screenSub: { fontSize: 13, fontFamily: MF.regular, color: C.muted, marginTop: 2 },
+    aiBadge: {
+      width: 44, height: 44, borderRadius: 22,
+      backgroundColor: C.emerald, alignItems: 'center', justifyContent: 'center',
+      ...shadow(C.emerald, 0, 4, 8, 0.4), elevation: 6,
+    },
+    aiBadgeGlyph: { fontSize: 20, color: '#fff' },
 
     // ── Hero sub-row (rendered inside HeroCard) ──
     heroLine: { height: 3, width: 40, backgroundColor: C.gold, borderRadius: 2, marginVertical: 10 },

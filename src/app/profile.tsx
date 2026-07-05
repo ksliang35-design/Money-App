@@ -10,6 +10,7 @@ import { AvatarPicker } from '@/components/avatar-picker';
 import { IncomeEditModal, type IncomeModalMode } from '@/components/income-edit-modal';
 import { LanguagePicker } from '@/components/language-picker';
 import { NotesScreen } from '@/components/notes-screen';
+import { TabAgentOverlay } from '@/components/tab-agent-overlay';
 import { Card } from '@/components/ui/Card';
 import { TabSelector } from '@/components/ui/TabSelector';
 import { MF, MR, MS, fmt } from '@/constants/money-theme';
@@ -19,6 +20,7 @@ import { useTheme } from '@/hooks/useTheme';
 import { useT } from '@/i18n';
 import type { Language } from '@/i18n';
 import { exportJSON, pickJSONFile } from '@/lib/backup';
+import { homeAgentConfig } from '@/lib/agents/home-agent';
 import { useAppData } from '@/store/AppDataProvider';
 
 const LAST_EXPORT_KEY = 'money-hub-last-export';
@@ -33,7 +35,7 @@ function isValidBackup(obj: unknown): boolean {
 
 export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
-  const { data, importData, resetData, setLanguage, setAvatar, setName, setThemeMode } = useAppData();
+  const { data, importData, resetData, setLanguage, setAvatar, setName, setThemeMode, addBill } = useAppData();
   const t = useT();
   const C = useTheme();
   const styles = useMemo(() => makeStyles(C), [C]);
@@ -46,6 +48,7 @@ export default function ProfileScreen() {
   const [lastExportAt, setLastExportAt] = useState<string | null>(null);
   const [backupBusy, setBackupBusy] = useState(false);
   const [editingName, setEditingName] = useState(false);
+  const [aiOpen, setAiOpen] = useState(false);
   const [nameInput, setNameInput] = useState(data.name);
 
   useEffect(() => {
@@ -185,6 +188,9 @@ export default function ProfileScreen() {
               )}
               <Text style={styles.heroSnap}>{t('profile.snapshot', { month: data.month })}</Text>
             </View>
+            <Pressable style={styles.aiBadge} onPress={() => setAiOpen(true)}>
+              <Text style={styles.aiBadgeGlyph}>♞</Text>
+            </Pressable>
           </View>
           <View style={styles.heroStatsRow}>
             <View style={styles.heroStat}>
@@ -389,6 +395,22 @@ export default function ProfileScreen() {
 
       <IncomeEditModal mode={modalMode} onClose={() => setModalMode(null)} />
       <NotesScreen visible={notesOpen} onClose={() => setNotesOpen(false)} />
+
+      <TabAgentOverlay
+        config={homeAgentConfig}
+        visible={aiOpen}
+        onClose={() => setAiOpen(false)}
+        userName={data.name}
+        data={{
+          salary: data.salary,
+          side: data.side,
+          income: data.income,
+          net: data.net,
+          savingsRate: data.savingsRate,
+          sideShare: data.sideShare,
+        }}
+        ops={{ addBill }}
+      />
     </View>
   );
 }
@@ -403,6 +425,11 @@ function makeStyles(C: AppTheme) {
     profileHero: { borderRadius: MR.xxl, padding: MS.xl, gap: MS.lg, ...shadow('#000', 0, 8, 16, 0.3), elevation: 6 },
     profileHeroTop: { flexDirection: 'row', alignItems: 'center', gap: MS.lg },
     profileHeroInfo: { flex: 1 },
+    aiBadge: {
+      width: 40, height: 40, borderRadius: 20,
+      backgroundColor: 'rgba(255,255,255,0.2)', alignItems: 'center', justifyContent: 'center',
+    },
+    aiBadgeGlyph: { fontSize: 18, color: '#fff' },
     heroNameRow: { flexDirection: 'row', alignItems: 'center', gap: MS.xs },
     heroName: { fontSize: 22, fontFamily: MF.bold, color: '#fff' },
     heroNameEdit: { fontSize: 14, color: 'rgba(255,255,255,0.6)', marginTop: 2 },

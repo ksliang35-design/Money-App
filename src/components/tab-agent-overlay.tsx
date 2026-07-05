@@ -17,38 +17,34 @@ import { MF, MR, MS } from '@/constants/money-theme';
 import { type AppTheme } from '@/constants/theme';
 import { useTheme } from '@/hooks/useTheme';
 import { useT } from '@/i18n';
-import { getAIReply } from '@/lib/coach';
-import { useAppData } from '@/store/AppDataProvider';
+import { getAgentReply } from '@/lib/agents/agent-runtime';
+import type { AgentConfig, ChatTurn } from '@/lib/agents/types';
 
-type Message = { role: 'ai' | 'user'; text: string; action?: PendingAction };
-type PendingAction = { label: string; description: string };
+type Message = { role: 'ai' | 'user'; text: string };
 
-interface Props {
+interface Props<TData, TOps> {
+  config: AgentConfig<TData, TOps>;
   visible: boolean;
   onClose: () => void;
+  data: TData;
+  ops: TOps;
+  userName: string;
 }
 
-export function MoneyAIOverlay({ visible, onClose }: Props) {
+export function TabAgentOverlay<TData, TOps>({ config, visible, onClose, data, ops, userName }: Props<TData, TOps>) {
   const insets = useSafeAreaInsets();
   const scrollRef = useRef<ScrollView>(null);
-  const { data, addBill } = useAppData();
   const t = useT();
   const C = useTheme();
   const styles = useMemo(() => makeStyles(C), [C]);
 
-  const QUICK_ACTIONS = [
-    { icon: '🔍', label: t('ai.weeklyCheck'), q: 'Give me a quick weekly financial check.' },
-    { icon: '❤️', label: t('ai.healthCheck'), q: 'Am I financially healthy right now?' },
-    { icon: '💡', label: t('ai.saveMore'),    q: 'Suggest 3 ways I could save more this month.' },
-    { icon: '🎯', label: t('ai.goalPlan'),    q: 'How can I reach my emergency fund goal faster?' },
-  ];
+  const QUICK_ACTIONS = config.quickActions.map((a) => ({ ...a, label: t(a.labelKey) }));
 
   const [messages, setMessages] = useState<Message[]>(() => [
-    { role: 'ai', text: t('ai.greeting', { name: data.name }) },
+    { role: 'ai', text: t(config.greetingKey, { name: userName }) },
   ]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
-  const [confirm, setConfirm] = useState<PendingAction | null>(null);
   const [agentStatus, setAgentStatus] = useState<string | null>(null);
   const [pendingToolConfirm, setPendingToolConfirm] = useState<{
     label: string;
@@ -56,10 +52,9 @@ export function MoneyAIOverlay({ visible, onClose }: Props) {
     resolve: (v: boolean) => void;
   } | null>(null);
 
-  const STATUS_LABELS: Record<string, string> = {
-    getSpendingByCategory: t('ai.statusSpending'),
-    createReminder: t('ai.statusReminder'),
-  };
+  const STATUS_LABELS: Record<string, string> = Object.fromEntries(
+    Object.entries(config.statusLabelKeys).map(([toolName, key]) => [toolName, t(key)]),
+  );
 
   function confirmAction(label: string, description: string): Promise<boolean> {
     return new Promise((resolve) => setPendingToolConfirm({ label, description, resolve }));
@@ -84,45 +79,17 @@ export function MoneyAIOverlay({ visible, onClose }: Props) {
     setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 50);
 
     try {
-      const goalsText = data.goals.length
-        ? data.goals
-            .map(
-              (g) =>
-                `${g.label} (RM ${g.saved.toLocaleString('en-MY')} of RM ${g.target.toLocaleString('en-MY')}, ${Math.round((g.saved / g.target) * 100)}%)`,
-            )
-            .join(', ')
-        : 'No goals set yet';
-
-      const history = messages
+      const history: ChatTurn[] = messages
         .slice(1)
         .slice(-8)
         .map((m) => ({ role: m.role, text: m.text }));
 
-      const reply = await getAIReply(
-        q,
-        data.name,
-        {
-          income: data.income,
-          expense: data.expense,
-          net: data.net,
-          savingsRate: data.savingsRate,
-          byMethod: data.byMethod,
-          byCategory: data.byCategory,
-        },
-        goalsText,
-        history,
-        {
-          month: data.month,
-          monthlyRecords: data.monthlyRecords,
-          addBill,
-          onStatus: (toolName) => setAgentStatus(STATUS_LABELS[toolName] ?? t('ai.statusThinking')),
-          confirmAction,
-        },
-      );
+      const reply = await getAgentReply(config, q, userName, data, ops, history, {
+        onStatus: (toolName) => setAgentStatus(STATUS_LABELS[toolName] ?? t('ai.common.statusThinking')),
+        confirmAction,
+      });
 
-      const aiMsg: Message = { role: 'ai', text: reply.text, action: reply.action ?? undefined };
-      setMessages((m) => [...m, aiMsg]);
-      if (reply.action) setTimeout(() => setConfirm(reply.action as PendingAction), 400);
+      setMessages((m) => [...m, { role: 'ai', text: reply.text }]);
     } catch (e: any) {
       const isNoKey = e?.message === 'NO_API_KEY';
       setMessages((m) => [
@@ -130,8 +97,8 @@ export function MoneyAIOverlay({ visible, onClose }: Props) {
         {
           role: 'ai',
           text: isNoKey
-            ? t('ai.noKey')
-            : `${t('ai.errorPrefix')}${e?.message?.slice(0, 80) ?? ''}`,
+            ? t('ai.common.noKey')
+            : `${t('ai.common.errorPrefix')}${e?.message?.slice(0, 80) ?? ''}`,
         },
       ]);
     } finally {
@@ -147,10 +114,10 @@ export function MoneyAIOverlay({ visible, onClose }: Props) {
         {/* Header */}
         <View style={styles.header}>
           <View style={styles.headerLeft}>
-            <Text style={styles.horse}>♞</Text>
+            <Text style={styles.glyph}>{config.glyph}</Text>
             <View>
-              <Text style={styles.headerTitle}>{t('ai.title')}</Text>
-              <Text style={styles.headerSub}>{t('ai.sub')}</Text>
+              <Text style={styles.headerTitle}>{t(config.titleKey)}</Text>
+              <Text style={styles.headerSub}>{t(config.subtitleKey)}</Text>
             </View>
           </View>
           <Pressable onPress={handleClose} style={styles.closeBtn}>
@@ -170,7 +137,7 @@ export function MoneyAIOverlay({ visible, onClose }: Props) {
             showsVerticalScrollIndicator={false}>
             {messages.map((m, i) => (
               <View key={i} style={[styles.bubble, m.role === 'user' ? styles.bubbleUser : styles.bubbleAI]}>
-                {m.role === 'ai' && <Text style={styles.bubbleWho}>♞ Money AI</Text>}
+                {m.role === 'ai' && <Text style={styles.bubbleWho}>{config.glyph} {t(config.titleKey)}</Text>}
                 <Text style={[styles.bubbleText, m.role === 'user' && styles.bubbleTextUser]}>
                   {m.text}
                 </Text>
@@ -178,7 +145,7 @@ export function MoneyAIOverlay({ visible, onClose }: Props) {
             ))}
             {loading && (
               <View style={[styles.bubble, styles.bubbleAI]}>
-                <Text style={styles.bubbleWho}>♞ Money AI</Text>
+                <Text style={styles.bubbleWho}>{config.glyph} {t(config.titleKey)}</Text>
                 <ActivityIndicator size="small" color={C.emerald} style={{ marginTop: 2 }} />
                 {!!agentStatus && <Text style={styles.statusText}>{agentStatus}</Text>}
               </View>
@@ -206,7 +173,7 @@ export function MoneyAIOverlay({ visible, onClose }: Props) {
           <View style={[styles.inputRow, { paddingBottom: insets.bottom || 12 }]}>
             <TextInput
               style={styles.input}
-              placeholder={t('ai.placeholder')}
+              placeholder={t(config.placeholderKey)}
               placeholderTextColor={C.muted}
               value={input}
               onChangeText={setInput}
@@ -224,41 +191,12 @@ export function MoneyAIOverlay({ visible, onClose }: Props) {
           </View>
         </KeyboardAvoidingView>
 
-        {/* Confirm dialog */}
-        {confirm && (
-          <View style={styles.confirmBackdrop}>
-            <View style={styles.confirmCard}>
-              <Text style={styles.confirmTitle}>{confirm.label}</Text>
-              <Text style={styles.confirmDesc}>{confirm.description}</Text>
-              <View style={styles.confirmBtns}>
-                <Pressable style={styles.confirmNot} onPress={() => setConfirm(null)}>
-                  <Text style={styles.confirmNotText}>{t('common.notNow')}</Text>
-                </Pressable>
-                <Pressable
-                  style={styles.confirmOk}
-                  onPress={() => {
-                    setMessages((m) => [
-                      ...m,
-                      {
-                        role: 'ai',
-                        text: `Done! I've noted: "${confirm!.label}". Remember, I can only suggest — take action in the app to make it real.`,
-                      },
-                    ]);
-                    setConfirm(null);
-                  }}>
-                  <Text style={styles.confirmOkText}>{t('common.confirm')}</Text>
-                </Pressable>
-              </View>
-            </View>
-          </View>
-        )}
-
-        {/* Real tool-gate confirm dialog — separate from the (now dormant) cosmetic one above */}
+        {/* Tool-gate confirm dialog — shown before a mutating tool actually runs */}
         {pendingToolConfirm && (
           <View style={styles.confirmBackdrop}>
             <View style={styles.confirmCard}>
               <Text style={styles.confirmTitle}>
-                {t('ai.confirmActionTitle', { action: pendingToolConfirm.label })}
+                {t('ai.common.confirmActionTitle', { action: pendingToolConfirm.label })}
               </Text>
               <Text style={styles.confirmDesc}>{pendingToolConfirm.description}</Text>
               <View style={styles.confirmBtns}>
@@ -268,7 +206,7 @@ export function MoneyAIOverlay({ visible, onClose }: Props) {
                     pendingToolConfirm.resolve(false);
                     setPendingToolConfirm(null);
                   }}>
-                  <Text style={styles.confirmNotText}>{t('ai.deny')}</Text>
+                  <Text style={styles.confirmNotText}>{t('ai.common.deny')}</Text>
                 </Pressable>
                 <Pressable
                   style={styles.confirmOk}
@@ -276,7 +214,7 @@ export function MoneyAIOverlay({ visible, onClose }: Props) {
                     pendingToolConfirm.resolve(true);
                     setPendingToolConfirm(null);
                   }}>
-                  <Text style={styles.confirmOkText}>{t('ai.allow')}</Text>
+                  <Text style={styles.confirmOkText}>{t('ai.common.allow')}</Text>
                 </Pressable>
               </View>
             </View>
@@ -300,7 +238,7 @@ function makeStyles(C: AppTheme) {
       backgroundColor: C.emerald,
     },
     headerLeft: { flexDirection: 'row', alignItems: 'center', gap: MS.sm },
-    horse: { fontSize: 28, color: '#fff' },
+    glyph: { fontSize: 28, color: '#fff' },
     headerTitle: { fontSize: 18, fontFamily: MF.bold, color: '#fff' },
     headerSub: { fontSize: 11, color: 'rgba(255,255,255,0.75)', marginTop: 1 },
     closeBtn: {

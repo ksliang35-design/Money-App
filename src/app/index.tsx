@@ -4,7 +4,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AvatarDisplay } from '@/components/avatar-display';
-import { MoneyAIOverlay } from '@/components/money-ai-overlay';
+import { TabAgentOverlay } from '@/components/tab-agent-overlay';
 import { Card } from '@/components/ui/Card';
 import { HeroCard } from '@/components/ui/HeroCard';
 import { ProgressBar } from '@/components/ui/ProgressBar';
@@ -14,12 +14,13 @@ import { shadow } from '@/constants/shadow';
 import { type AppTheme } from '@/constants/theme';
 import { useTheme } from '@/hooks/useTheme';
 import { useT } from '@/i18n';
+import { homeAgentConfig } from '@/lib/agents/home-agent';
 import { useAppData } from '@/store/AppDataProvider';
 
 export default function DashboardScreen() {
   const insets = useSafeAreaInsets();
   const [aiOpen, setAiOpen] = useState(false);
-  const { data } = useAppData();
+  const { data, addBill } = useAppData();
   const t = useT();
   const C = useTheme();
   const styles = useMemo(() => makeStyles(C), [C]);
@@ -131,7 +132,21 @@ export default function DashboardScreen() {
         <View style={{ height: MS.xxl }} />
       </ScrollView>
 
-      <MoneyAIOverlay visible={aiOpen} onClose={() => setAiOpen(false)} />
+      <TabAgentOverlay
+        config={homeAgentConfig}
+        visible={aiOpen}
+        onClose={() => setAiOpen(false)}
+        userName={data.name}
+        data={{
+          salary: data.salary,
+          side: data.side,
+          income: data.income,
+          net: data.net,
+          savingsRate: data.savingsRate,
+          sideShare: data.sideShare,
+        }}
+        ops={{ addBill }}
+      />
     </View>
   );
 }

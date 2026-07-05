@@ -15,6 +15,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ExpenseEditModal, type ExpenseModalMode } from '@/components/expense-edit-modal';
+import { TabAgentOverlay } from '@/components/tab-agent-overlay';
 import { Card } from '@/components/ui/Card';
 import { ProgressBar } from '@/components/ui/ProgressBar';
 import { SectionLabel } from '@/components/ui/SectionLabel';
@@ -25,6 +26,7 @@ import { shadow } from '@/constants/shadow';
 import { type AppTheme } from '@/constants/theme';
 import { useTheme } from '@/hooks/useTheme';
 import { type Expense, type ExpenseCategory, CATEGORY_STYLE } from '@/constants/mock-data';
+import { expensesAgentConfig } from '@/lib/agents/expenses-agent';
 import { parseExpense, type ParsedExpense } from '@/lib/quickadd';
 import { useT } from '@/i18n';
 import { useAppData } from '@/store/AppDataProvider';
@@ -39,6 +41,7 @@ export default function ExpensesScreen() {
   const [tab, setTab] = useState<ExpTab>('overview');
   const [filter, setFilter] = useState<Method>('all');
   const [modalMode, setModalMode] = useState<ExpenseModalMode>(null);
+  const [aiOpen, setAiOpen] = useState(false);
   const { data, addExpense } = useAppData();
   const t = useT();
   const C = useTheme();
@@ -149,6 +152,9 @@ export default function ExpensesScreen() {
             <Text style={styles.screenSub}>{data.month}</Text>
           </View>
           <View style={styles.headerBtns}>
+            <Pressable style={styles.aiBadge} onPress={() => setAiOpen(true)}>
+              <Text style={styles.aiBadgeGlyph}>💸</Text>
+            </Pressable>
             <Pressable style={styles.quickAddBtn} onPress={() => setQuickOpen(true)}>
               <Text style={styles.quickAddBtnText}>{t('expenses.quickAdd')}</Text>
             </Pressable>
@@ -439,6 +445,21 @@ export default function ExpensesScreen() {
           </View>
         </KeyboardAvoidingView>
       </Modal>
+
+      <TabAgentOverlay
+        config={expensesAgentConfig}
+        visible={aiOpen}
+        onClose={() => setAiOpen(false)}
+        userName={data.name}
+        data={{
+          month: data.month,
+          expenses: data.expenses,
+          byCategory: data.byCategory,
+          byMethod: data.byMethod,
+          monthlyRecords: data.monthlyRecords,
+        }}
+        ops={{ addExpense }}
+      />
     </View>
   );
 }
@@ -454,6 +475,12 @@ function makeStyles(C: AppTheme) {
     screenTitle: { fontSize: 26, fontFamily: MF.bold, color: C.ink },
     screenSub: { fontSize: 13, fontFamily: MF.regular, color: C.muted, marginTop: 2 },
     headerBtns: { flexDirection: 'row', gap: MS.sm, alignItems: 'center' },
+    aiBadge: {
+      width: 40, height: 40, borderRadius: 20,
+      backgroundColor: C.clay, alignItems: 'center', justifyContent: 'center',
+      ...shadow(C.clay, 0, 4, 8, 0.4), elevation: 6,
+    },
+    aiBadgeGlyph: { fontSize: 18, color: '#fff' },
     quickAddBtn: {
       paddingHorizontal: MS.md, paddingVertical: MS.sm,
       borderRadius: 999, backgroundColor: C.card,
