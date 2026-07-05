@@ -17,10 +17,21 @@ function billDaysUntil(bill: Bill, today: Date): number {
   const m = today.getMonth();
   const d = today.getDate();
   const todayMs = new Date(y, m, d).getTime();
+
+  if (bill.date) {
+    const [dy, dm, dd] = bill.date.split('-').map(Number);
+    return Math.round((new Date(dy, dm - 1, dd).getTime() - todayMs) / 86400000);
+  }
+
   const thisMonthMs = new Date(y, m, bill.dueDay).getTime();
   const daysThisMonth = Math.round((thisMonthMs - todayMs) / 86400000);
   if (daysThisMonth >= -7) return daysThisMonth;
   return Math.round((new Date(y, m + 1, bill.dueDay).getTime() - todayMs) / 86400000);
+}
+
+function formatBillDate(dateStr: string): string {
+  const [dy, dm, dd] = dateStr.split('-').map(Number);
+  return new Date(dy, dm - 1, dd).toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
 }
 
 function badgeColor(days: number, C: AppTheme): string {
@@ -133,7 +144,9 @@ export default function BillsScreen() {
                     </View>
                     <View style={styles.billRight}>
                       <Text style={[styles.billAmt, { color: C.clay }]}>{fmt(bill.amount)}</Text>
-                      <Text style={styles.billDay}>{t('bills.dayOfMonth', { n: String(bill.dueDay) })}</Text>
+                      <Text style={styles.billDay}>
+                        {bill.date ? t('bills.oneTimeOn', { date: formatBillDate(bill.date) }) : t('bills.dayOfMonth', { n: String(bill.dueDay) })}
+                      </Text>
                       {!!bill.reminder && bill.reminder !== 'none' && (
                         <Text style={[styles.reminderBadge, { color: C.indigo }]}>
                           🔔 {bill.reminder === 'daily' ? t('bills.reminderDaily') : t('bills.reminderWeekly')}
@@ -166,7 +179,9 @@ export default function BillsScreen() {
                     </View>
                     <View style={styles.billRight}>
                       <Text style={[styles.billAmt, { color: C.emerald }]}>{fmt(bill.amount)}</Text>
-                      <Text style={styles.billDay}>{t('bills.dayOfMonth', { n: String(bill.dueDay) })}</Text>
+                      <Text style={styles.billDay}>
+                        {bill.date ? t('bills.oneTimeOn', { date: formatBillDate(bill.date) }) : t('bills.dayOfMonth', { n: String(bill.dueDay) })}
+                      </Text>
                       {!!bill.reminder && bill.reminder !== 'none' && (
                         <Text style={[styles.reminderBadge, { color: C.indigo }]}>
                           🔔 {bill.reminder === 'daily' ? t('bills.reminderDaily') : t('bills.reminderWeekly')}

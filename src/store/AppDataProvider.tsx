@@ -24,6 +24,9 @@ export interface Bill {
   type: 'bill' | 'payday';
   reminder?: 'none' | 'daily' | 'weekly';
   notes?: string;
+  /** Full ISO date (YYYY-MM-DD) for a one-time reminder. When set, this bill fires once on
+   *  that exact date instead of recurring monthly on `dueDay`. */
+  date?: string;
 }
 
 export interface MonthlyRecord {

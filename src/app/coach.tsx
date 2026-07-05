@@ -87,9 +87,17 @@ interface ActiveHabit {
   id: string;
   title: string;
   steps: string[];
+  startedAt: string;  // local ISO date (YYYY-MM-DD), set once when the habit is started
+  checkIns: string[]; // local ISO dates the user checked in, one entry per day
 }
 
 const HABITS_STORAGE_KEY = 'money-wisdom-active-habits';
+
+// Local date, not UTC — toISOString() would shift the date for UTC+8 users (see lib/coach.ts fix).
+function todayISO(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
 
 const MONEY_WISDOM_CARDS: MoneyWisdomCard[] = [
   {
@@ -235,6 +243,42 @@ function getSavingsTrend(data: DerivedData): string | null {
   return `Savings rate ${dir} from ${oldestRate}% (${oldest.month}) to ${currentRate}% now`;
 }
 
+interface HabitAdherence {
+  daysSinceStart: number;
+  streak: number;
+  checkedInToday: boolean;
+}
+
+function isoDaysAgo(iso: string, n: number): string {
+  const [y, m, d] = iso.split('-').map(Number);
+  const dt = new Date(y, m - 1, d);
+  dt.setDate(dt.getDate() - n);
+  return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
+}
+
+// Adherence (days active / check-in streak) is independent of the financial progress
+// above — it tracks whether the user is actually showing up, not whether their numbers hit target.
+function getAdherence(habit: ActiveHabit, today: string): HabitAdherence {
+  const [sy, sm, sd] = habit.startedAt.split('-').map(Number);
+  const [ty, tm, td] = today.split('-').map(Number);
+  const daysSinceStart = Math.max(
+    1,
+    Math.round((new Date(ty, tm - 1, td).getTime() - new Date(sy, sm - 1, sd).getTime()) / 86400000) + 1,
+  );
+
+  const checkIns = new Set(habit.checkIns);
+  const checkedInToday = checkIns.has(today);
+
+  let streak = 0;
+  let cursor = checkedInToday ? today : isoDaysAgo(today, 1);
+  while (checkIns.has(cursor)) {
+    streak += 1;
+    cursor = isoDaysAgo(cursor, 1);
+  }
+
+  return { daysSinceStart, streak, checkedInToday };
+}
+
 interface HabitsSummary {
   onTrack: number;
   total: number;
@@ -279,7 +323,7 @@ function incomeToBracket(income: number): string {
 
 export default function CoachScreen() {
   const insets = useSafeAreaInsets();
-  const { data, saveCoachResult, clearCoachResult } = useAppData();
+  const { data, saveCoachResult, clearCoachResult, addBill } = useAppData();
   const t = useT();
   const C = useTheme();
   const styles = useMemo(() => makeStyles(C), [C]);
@@ -316,12 +360,22 @@ export default function CoachScreen() {
 
   useEffect(() => {
     AsyncStorage.getItem(HABITS_STORAGE_KEY).then((json) => {
-      if (json) setActiveHabits(JSON.parse(json) as ActiveHabit[]);
+      if (!json) return;
+      const stored = JSON.parse(json) as Partial<ActiveHabit>[];
+      // Normalize habits saved before adherence tracking existed.
+      const normalized = stored.map((h) => ({
+        id: h.id!,
+        title: h.title!,
+        steps: h.steps ?? [],
+        startedAt: h.startedAt ?? todayISO(),
+        checkIns: h.checkIns ?? [],
+      }));
+      setActiveHabits(normalized);
     });
   }, []);
 
   const startHabit = (card: MoneyWisdomCard) => {
-    const next = [...activeHabits, { id: card.id, title: card.title, steps: card.steps }];
+    const next = [...activeHabits, { id: card.id, title: card.title, steps: card.steps, startedAt: todayISO(), checkIns: [] }];
     setActiveHabits(next);
     AsyncStorage.setItem(HABITS_STORAGE_KEY, JSON.stringify(next));
   };
@@ -330,6 +384,29 @@ export default function CoachScreen() {
     const next = activeHabits.filter((h) => h.id !== id);
     setActiveHabits(next);
     AsyncStorage.setItem(HABITS_STORAGE_KEY, JSON.stringify(next));
+  };
+
+  const checkInHabit = (id: string) => {
+    const today = todayISO();
+    const next = activeHabits.map((h) =>
+      h.id === id && !h.checkIns.includes(today) ? { ...h, checkIns: [...h.checkIns, today] } : h,
+    );
+    setActiveHabits(next);
+    AsyncStorage.setItem(HABITS_STORAGE_KEY, JSON.stringify(next));
+  };
+
+  const habitReminderNotes = (habit: ActiveHabit) => `Weekly check-in for "${habit.title}" habit`;
+
+  const setHabitReminder = (habit: ActiveHabit) => {
+    addBill({
+      name: `${habit.title} check-in`,
+      amount: 0,
+      dueDay: Number(todayISO().split('-')[2]),
+      category: 'Reminder',
+      type: 'bill',
+      notes: habitReminderNotes(habit),
+      reminder: 'weekly',
+    });
   };
 
   const suggestedBracket = incomeToBracket(data.income);
@@ -973,6 +1050,7 @@ export default function CoachScreen() {
             {savingsTrend && <Text style={styles.habitsTrend}>{savingsTrend}</Text>}
             {activeHabits.map((habit) => {
               const progress = getHabitProgress(habit.id, data);
+              const adherence = getAdherence(habit, todayISO());
               return (
                 <View key={habit.id} style={styles.habitRow}>
                   <View style={styles.habitRowTop}>
@@ -1000,6 +1078,41 @@ export default function CoachScreen() {
                   {progress.detail && (
                     <Text style={styles.habitDetailText} numberOfLines={2}>{progress.detail}</Text>
                   )}
+                  <View style={styles.habitStreakRow}>
+                    <Text style={styles.habitStreakText}>
+                      Day {adherence.daysSinceStart}
+                      {adherence.streak > 0 ? ` · 🔥 ${adherence.streak}-day streak` : ' · No check-ins yet'}
+                    </Text>
+                    <Pressable
+                      disabled={adherence.checkedInToday}
+                      onPress={() => checkInHabit(habit.id)}
+                      style={({ pressed }) => [
+                        styles.habitCheckInBtn,
+                        adherence.checkedInToday && styles.habitCheckInBtnDone,
+                        pressed && !adherence.checkedInToday && { opacity: 0.6 },
+                      ]}>
+                      <Text style={[styles.habitCheckInTxt, adherence.checkedInToday && styles.habitCheckInTxtDone]}>
+                        {adherence.checkedInToday ? '✓ Checked in' : 'Check in today'}
+                      </Text>
+                    </Pressable>
+                  </View>
+                  {habit.id === 'behavior-beats-math' && (() => {
+                    const hasReminder = data.bills.some((b) => b.notes === habitReminderNotes(habit));
+                    return (
+                      <Pressable
+                        disabled={hasReminder}
+                        onPress={() => setHabitReminder(habit)}
+                        style={({ pressed }) => [
+                          styles.habitReminderBtn,
+                          hasReminder && styles.habitCheckInBtnDone,
+                          pressed && !hasReminder && { opacity: 0.6 },
+                        ]}>
+                        <Text style={[styles.habitCheckInTxt, hasReminder && styles.habitCheckInTxtDone]}>
+                          {hasReminder ? '✓ Reminder set' : 'Set weekly reminder'}
+                        </Text>
+                      </Pressable>
+                    );
+                  })()}
                 </View>
               );
             })}
@@ -1623,5 +1736,29 @@ function makeStyles(C: AppTheme) {
     habitProgressText: { flex: 1, fontSize: 11, fontFamily: MF.regular, color: C.muted, lineHeight: 16 },
     habitProgressBar: { marginTop: 2 },
     habitDetailText: { fontSize: 10, fontFamily: MF.regular, color: C.muted, fontStyle: 'italic' },
+    habitStreakRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginTop: 2,
+    },
+    habitStreakText: { fontSize: 11, fontFamily: MF.medium, color: C.ink },
+    habitCheckInBtn: {
+      paddingHorizontal: MS.sm,
+      paddingVertical: 4,
+      borderRadius: MR.md,
+      backgroundColor: C.emerald,
+    },
+    habitCheckInBtnDone: { backgroundColor: C.line },
+    habitCheckInTxt: { fontSize: 11, fontFamily: MF.semiBold, color: '#fff' },
+    habitCheckInTxtDone: { color: C.muted },
+    habitReminderBtn: {
+      marginTop: 6,
+      alignItems: 'center',
+      paddingHorizontal: MS.sm,
+      paddingVertical: 4,
+      borderRadius: MR.md,
+      backgroundColor: C.emerald,
+    },
   });
 }
