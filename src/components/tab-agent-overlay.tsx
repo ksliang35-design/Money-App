@@ -91,16 +91,13 @@ export function TabAgentOverlay<TData, TOps>({ config, visible, onClose, data, o
 
       setMessages((m) => [...m, { role: 'ai', text: reply.text }]);
     } catch (e: any) {
-      const isNoKey = e?.message === 'NO_API_KEY';
-      setMessages((m) => [
-        ...m,
-        {
-          role: 'ai',
-          text: isNoKey
-            ? t('ai.common.noKey')
-            : `${t('ai.common.errorPrefix')}${e?.message?.slice(0, 80) ?? ''}`,
-        },
-      ]);
+      const msg = e?.message;
+      const text =
+        msg === 'NO_API_KEY' ? t('ai.common.noKey')
+        : msg === 'RATE_LIMITED' ? t('ai.common.rateLimited')
+        : msg === 'PROXY_UNAUTHORIZED' ? t('ai.common.unauthorized')
+        : `${t('ai.common.errorPrefix')}${msg?.slice(0, 80) ?? ''}`;
+      setMessages((m) => [...m, { role: 'ai', text }]);
     } finally {
       setLoading(false);
       setAgentStatus(null);

@@ -121,7 +121,12 @@ export default function ExpensesScreen() {
         setQaMethod(result.method as ExpenseMethod);
       }
     } catch (e: any) {
-      setQaError(e?.message ?? 'Parse failed');
+      const msg = e?.message;
+      setQaError(
+        msg === 'RATE_LIMITED' ? t('expenses.qaRateLimited')
+        : msg === 'PROXY_UNAUTHORIZED' ? t('expenses.qaUnauthorized')
+        : msg ?? 'Parse failed',
+      );
     } finally {
       setQaLoading(false);
     }

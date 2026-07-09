@@ -76,6 +76,8 @@ export const ms: TranslationShape = {
     qaPlaceholder: 'cth. "RM23 makan tengahari Grab" atau tampal SMS bank',
     qaParse: 'Analisis dengan AI',
     qaNoKey: 'Kunci API tidak ditetapkan. Tambah EXPO_PUBLIC_GEMINI_API_KEY ke fail .env dan mulakan semula pelayan.',
+    qaRateLimited: 'Terlalu banyak permintaan buat masa ini. Sila tunggu seminit dan cuba lagi.',
+    qaUnauthorized: 'Tidak dapat mengesahkan perkhidmatan AI. Sila cuba lagi kemudian.',
     qaNotExpense: 'Ini bukan perbelanjaan sebenar (OTP, promosi, atau bukan pembelian). Cuba mesej lain.',
     qaPaymentMethod: 'Kaedah pembayaran',
     qaAddBtn: 'Tambah Perbelanjaan',
@@ -135,6 +137,8 @@ export const ms: TranslationShape = {
     noKeyTitle: 'Kunci API tidak ditetapkan',
     noKeyMsg: 'Buka fail .env di root projek dan tampal kunci Gemini API anda selepas\nEXPO_PUBLIC_GEMINI_API_KEY=\n\nKemudian mulakan semula pelayan.',
     errorTitle: 'Gagal memuatkan pelan anda',
+    rateLimitedMsg: 'Terlalu banyak permintaan buat masa ini. Sila tunggu seminit dan cuba lagi.',
+    unauthorizedMsg: 'Tidak dapat mengesahkan perkhidmatan AI. Sila cuba lagi kemudian.',
     recBudgetModel: 'Model belanjawan yang dicadangkan',
     pickTitle: 'Pilih model belanjawan anda',
     recommended: '✦ Disyorkan',
@@ -425,6 +429,8 @@ export const ms: TranslationShape = {
   ai: {
     common: {
       noKey: '🔑 Kunci API tidak ditetapkan. Tambah EXPO_PUBLIC_GEMINI_API_KEY ke fail .env dan mulakan semula pelayan.',
+      rateLimited: '⏳ Terlalu banyak permintaan buat masa ini. Sila tunggu seminit dan cuba lagi.',
+      unauthorized: '🔒 Tidak dapat mengesahkan perkhidmatan AI. Sila cuba lagi kemudian.',
       errorPrefix: 'Maaf, saya tidak dapat sambutan buat masa ini. ',
       statusThinking: 'Sedang berfikir…',
       confirmActionTitle: 'Agen ingin: {action}',

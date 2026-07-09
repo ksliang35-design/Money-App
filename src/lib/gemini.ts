@@ -11,6 +11,23 @@ const GEMINI_PROXY_URL = process.env.EXPO_PUBLIC_GEMINI_PROXY_URL;
 const GEMINI_PROXY_SECRET = process.env.EXPO_PUBLIC_GEMINI_PROXY_SECRET;
 const GEMINI_API_KEY = process.env.EXPO_PUBLIC_GEMINI_API_KEY;
 
+// Sentinel error messages UI callers can match on to show a friendly message
+// instead of the raw status/body (see NO_API_KEY thrown in buildGeminiRequest below).
+async function throwGeminiError(res: Response, context: string): Promise<never> {
+  if (res.status === 429) {
+    log.error(`${context} rate limited`);
+    throw new Error('RATE_LIMITED');
+  }
+  if (res.status === 401) {
+    log.error(`${context} unauthorized`);
+    throw new Error('PROXY_UNAUTHORIZED');
+  }
+  const errBody = await res.text().catch(() => '');
+  const msg = `Gemini error ${res.status}${errBody ? `: ${errBody.slice(0, 200)}` : ''}`;
+  log.error(`${context} failed`, msg);
+  throw new Error(msg);
+}
+
 function buildGeminiRequest(payload: Record<string, unknown>): { url: string; body: string; headers: Record<string, string> } {
   if (GEMINI_PROXY_URL) {
     return {
@@ -41,10 +58,7 @@ export async function callGemini(body: GeminiBody): Promise<string> {
   });
 
   if (!res.ok) {
-    const errBody = await res.text().catch(() => '');
-    const msg = `Gemini error ${res.status}${errBody ? `: ${errBody.slice(0, 200)}` : ''}`;
-    log.error('callGemini failed', msg);
-    throw new Error(msg);
+    await throwGeminiError(res, 'callGemini');
   }
 
   const json = await res.json();
@@ -94,10 +108,7 @@ export async function callGeminiWithTools(
     });
 
     if (!res.ok) {
-      const errBody = await res.text().catch(() => '');
-      const msg = `Gemini error ${res.status}${errBody ? `: ${errBody.slice(0, 200)}` : ''}`;
-      log.error('callGeminiWithTools failed', msg);
-      throw new Error(msg);
+      await throwGeminiError(res, 'callGeminiWithTools');
     }
 
     const json = await res.json();
@@ -171,10 +182,7 @@ export async function callGeminiAgentLoop(
     });
 
     if (!res.ok) {
-      const errBody = await res.text().catch(() => '');
-      const msg = `Gemini error ${res.status}${errBody ? `: ${errBody.slice(0, 200)}` : ''}`;
-      log.error('callGeminiAgentLoop failed', msg);
-      throw new Error(msg);
+      await throwGeminiError(res, 'callGeminiAgentLoop');
     }
 
     const json = await res.json();

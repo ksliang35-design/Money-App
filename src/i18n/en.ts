@@ -74,6 +74,8 @@ export const en = {
     qaPlaceholder: 'e.g. "RM23 Grab lunch" or paste bank SMS',
     qaParse: 'Parse with AI',
     qaNoKey: 'API key not set. Add EXPO_PUBLIC_GEMINI_API_KEY to your .env file and restart the server.',
+    qaRateLimited: 'Too many requests right now. Please wait a minute and try again.',
+    qaUnauthorized: 'Couldn\'t authenticate with the AI service. Please try again later.',
     qaNotExpense: 'This doesn\'t look like a real expense (OTP, promo, or non-purchase). Try a different message.',
     qaPaymentMethod: 'Payment method',
     qaAddBtn: 'Add Expense',
@@ -133,6 +135,8 @@ export const en = {
     noKeyTitle: 'API key not set',
     noKeyMsg: 'Open the .env file in the project root and paste your Gemini API key after\nEXPO_PUBLIC_GEMINI_API_KEY=\n\nThen restart the dev server.',
     errorTitle: 'Couldn\'t load your plan',
+    rateLimitedMsg: 'Too many requests right now. Please wait a minute and try again.',
+    unauthorizedMsg: 'Couldn\'t authenticate with the AI service. Please try again later.',
     recBudgetModel: 'Recommended budget model',
     pickTitle: 'Choose your budget model',
     recommended: '✦ Recommended',
@@ -423,6 +427,8 @@ export const en = {
   ai: {
     common: {
       noKey: '🔑 API key not set. Add EXPO_PUBLIC_GEMINI_API_KEY to your .env file and restart the server.',
+      rateLimited: '⏳ Too many requests right now. Please wait a minute and try again.',
+      unauthorized: '🔒 Couldn\'t authenticate with the AI service. Please try again later.',
       errorPrefix: 'Sorry, I couldn\'t get a response right now. ',
       statusThinking: 'Thinking…',
       confirmActionTitle: 'Agent wants to: {action}',

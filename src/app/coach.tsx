@@ -325,6 +325,12 @@ export default function CoachScreen() {
   const insets = useSafeAreaInsets();
   const { data, saveCoachResult, clearCoachResult, addBill } = useAppData();
   const t = useT();
+  const friendlyGeminiError = (e: any): string => {
+    const msg = e?.message;
+    if (msg === 'RATE_LIMITED') return t('coach.rateLimitedMsg');
+    if (msg === 'PROXY_UNAUTHORIZED') return t('coach.unauthorizedMsg');
+    return msg ?? 'Something went wrong. Please try again.';
+  };
   const C = useTheme();
   const styles = useMemo(() => makeStyles(C), [C]);
 
@@ -458,7 +464,7 @@ export default function CoachScreen() {
       );
       setOptions(result);
     } catch (e: any) {
-      setError(e?.message ?? 'Something went wrong. Please try again.');
+      setError(friendlyGeminiError(e));
     } finally {
       setLoading(false);
     }
@@ -494,7 +500,7 @@ export default function CoachScreen() {
       setPlan(result);
       saveCoachResult({ age: a.age, incomeBracket: a.incomeBracket, goal: a.goal }, result);
     } catch (e: any) {
-      setError(e?.message ?? 'Something went wrong. Please try again.');
+      setError(friendlyGeminiError(e));
     } finally {
       setLoading(false);
     }
@@ -522,7 +528,7 @@ export default function CoachScreen() {
         result,
       );
     } catch (e: any) {
-      setError(e?.message ?? 'Something went wrong. Please try again.');
+      setError(friendlyGeminiError(e));
     } finally {
       setLoading(false);
     }

@@ -76,6 +76,8 @@ export const zh: TranslationShape = {
     qaPlaceholder: '例如："RM23 Grab 午餐" 或粘贴银行短信',
     qaParse: 'AI 智能解析',
     qaNoKey: 'API 密钥未设置。请在 .env 文件中添加 EXPO_PUBLIC_GEMINI_API_KEY 并重启服务器。',
+    qaRateLimited: '当前请求过多，请稍等一分钟后重试。',
+    qaUnauthorized: '无法通过 AI 服务的身份验证，请稍后再试。',
     qaNotExpense: '这看起来不是真实消费（验证码、促销或非购物内容）。请换一条消息试试。',
     qaPaymentMethod: '付款方式',
     qaAddBtn: '添加支出',
@@ -135,6 +137,8 @@ export const zh: TranslationShape = {
     noKeyTitle: 'API 密钥未设置',
     noKeyMsg: '在项目根目录打开 .env 文件，并在以下内容后粘贴您的 Gemini API 密钥\nEXPO_PUBLIC_GEMINI_API_KEY=\n\n然后重启开发服务器。',
     errorTitle: '无法加载您的方案',
+    rateLimitedMsg: '当前请求过多，请稍等一分钟后重试。',
+    unauthorizedMsg: '无法通过 AI 服务的身份验证，请稍后再试。',
     recBudgetModel: '推荐预算模型',
     pickTitle: '选择您的预算模型',
     recommended: '✦ 推荐',
@@ -425,6 +429,8 @@ export const zh: TranslationShape = {
   ai: {
     common: {
       noKey: '🔑 API 密钥未设置。请在 .env 文件中添加 EXPO_PUBLIC_GEMINI_API_KEY 并重启服务器。',
+      rateLimited: '⏳ 当前请求过多，请稍等一分钟后重试。',
+      unauthorized: '🔒 无法通过 AI 服务的身份验证，请稍后再试。',
       errorPrefix: '抱歉，暂时无法获取回复。',
       statusThinking: '思考中…',
       confirmActionTitle: '助手想要：{action}',
