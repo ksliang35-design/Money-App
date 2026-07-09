@@ -33,6 +33,14 @@ yarn-error.*
 # local env files — never commit secrets
 .env
 .env*.local
+worker/.dev.vars
+
+# Firebase CLI local cache/logs
+.firebase/
+firebase-debug.log
+
+# Wrangler (Cloudflare Workers) local cache
+.wrangler/
 
 # typescript
 *.tsbuildinfo

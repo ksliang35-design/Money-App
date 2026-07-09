@@ -1,0 +1,19 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "money-hub-gemini-proxy",
+  "main": "src/index.js",
+  "compatibility_date": "2026-06-20",
+
+  "durable_objects": {
+    "bindings": [
+      { "name": "RATE_LIMITER", "class_name": "RateLimiter" }
+    ]
+  },
+  "migrations": [
+    { "tag": "v1", "new_sqlite_classes": ["RateLimiter"] }
+  ],
+
+  "observability": {
+    "enabled": true
+  }
+}
