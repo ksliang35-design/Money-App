@@ -47,7 +47,6 @@ export interface Holding {
 
 export const MOCK = {
   name: 'Steve',
-  month: 'June 2026',
   income: 6100,
   salary: 5000,
   side: 1100,

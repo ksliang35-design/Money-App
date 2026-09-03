@@ -15,6 +15,10 @@ const log = getLogger('AppDataProvider');
 // Moved outside component — pure function, no closure over state needed
 const nextId = (prefix: string) => `${prefix}${Date.now()}`;
 
+// Always derived from the real clock — never persisted/imported, so a stale
+// stored or backed-up value can't leave the app stuck on an old month.
+const monthLabel = (date: Date) => date.toLocaleString('en-US', { month: 'long', year: 'numeric' });
+
 export interface Bill {
   id: string;
   name: string;
@@ -111,7 +115,7 @@ interface AppDataContextValue {
 
 const defaultRaw: RawData = {
   name: MOCK.name,
-  month: MOCK.month,
+  month: monthLabel(new Date()),
   incomes: MOCK.incomes,
   expenses: MOCK.expenses,
   goals: MOCK.goals,
@@ -171,7 +175,7 @@ function derive(raw: RawData): DerivedData {
     portfolioValueDisplay += convertCcy(h.currentValue, ccy, displayCcy, rates);
   }
 
-  return { ...raw, income, salary, side, expense, net, savingsRate, sideShare, byMethod, byCategory, byCategoryArray, portfolioValue, portfolioValueDisplay };
+  return { ...raw, month: monthLabel(new Date()), income, salary, side, expense, net, savingsRate, sideShare, byMethod, byCategory, byCategoryArray, portfolioValue, portfolioValueDisplay };
 }
 
 const AppDataContext = createContext<AppDataContextValue | null>(null);
@@ -291,7 +295,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
         const monthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
         const record: MonthlyRecord = {
           monthKey,
-          month: r.month,
+          month: monthLabel(now),
           byCategory: d.byCategory,
           income: d.income,
           expense: d.expense,
