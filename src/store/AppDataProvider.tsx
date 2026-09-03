@@ -18,6 +18,11 @@ const nextId = (prefix: string) => `${prefix}${Date.now()}`;
 // Always derived from the real clock — never persisted/imported, so a stale
 // stored or backed-up value can't leave the app stuck on an old month.
 const monthLabel = (date: Date) => date.toLocaleString('en-US', { month: 'long', year: 'numeric' });
+const monthKeyOf = (date: Date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+const monthLabelForKey = (key: string) => {
+  const [y, m] = key.split('-').map(Number);
+  return monthLabel(new Date(y, m - 1, 1));
+};
 
 export interface Bill {
   id: string;
@@ -45,6 +50,10 @@ export interface MonthlyRecord {
 export interface RawData {
   name: string;
   month: string;
+  /** monthKey ('YYYY-MM') the live expenses/incomes were last known to belong to.
+   *  Compared against the real clock on load to detect a month boundary and
+   *  auto-archive the month that just ended. */
+  lastActiveMonthKey: string;
   incomes: Income[];
   expenses: Expense[];
   goals: Goal[];
@@ -116,6 +125,7 @@ interface AppDataContextValue {
 const defaultRaw: RawData = {
   name: MOCK.name,
   month: monthLabel(new Date()),
+  lastActiveMonthKey: monthKeyOf(new Date()),
   incomes: MOCK.incomes,
   expenses: MOCK.expenses,
   goals: MOCK.goals,
@@ -178,6 +188,21 @@ function derive(raw: RawData): DerivedData {
   return { ...raw, month: monthLabel(new Date()), income, salary, side, expense, net, savingsRate, sideShare, byMethod, byCategory, byCategoryArray, portfolioValue, portfolioValueDisplay };
 }
 
+// Snapshot of aggregate totals only — expenses/incomes have no per-transaction
+// date, so this is the best available approximation of "this month's" numbers.
+function buildMonthlyRecord(raw: RawData, monthKey: string, month: string): MonthlyRecord {
+  const d = derive(raw);
+  return { monthKey, month, byCategory: d.byCategory, income: d.income, expense: d.expense, net: d.net };
+}
+
+function upsertMonthlyRecord(records: MonthlyRecord[] | undefined, record: MonthlyRecord): MonthlyRecord[] {
+  const existing = (records ?? []).findIndex((m) => m.monthKey === record.monthKey);
+  const next = existing >= 0
+    ? (records ?? []).map((m, i) => (i === existing ? record : m))
+    : [...(records ?? []), record];
+  return next.sort((a, b) => b.monthKey.localeCompare(a.monthKey));
+}
+
 const AppDataContext = createContext<AppDataContextValue | null>(null);
 
 export function AppDataProvider({ children }: { children: ReactNode }) {
@@ -188,7 +213,28 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     loadData().then((stored) => {
       if (stored) {
         try {
-          setRaw({ ...defaultRaw, ...stored });
+          const merged: RawData = { ...defaultRaw, ...stored };
+          const realKey = monthKeyOf(new Date());
+
+          if (merged.lastActiveMonthKey && merged.lastActiveMonthKey !== realKey) {
+            // Real time crossed a month boundary since this data was last active.
+            // Aggregate-only rollover: archive whatever totals are live right now
+            // under the month that just ended, then adopt the new month. Expenses/
+            // incomes are NOT cleared — there's no per-transaction date to tell
+            // which entries were "last month's", so they carry forward as-is.
+            const endedKey = merged.lastActiveMonthKey;
+            const alreadyArchived = (merged.monthlyRecords ?? []).some((m) => m.monthKey === endedKey);
+            if (!alreadyArchived) {
+              // Don't clobber a deliberate manual "Save Current Month" from
+              // earlier in that month with today's now-stale cumulative totals.
+              const record = buildMonthlyRecord(merged, endedKey, monthLabelForKey(endedKey));
+              merged.monthlyRecords = upsertMonthlyRecord(merged.monthlyRecords, record);
+              log.info('month rollover: archived', endedKey, '→ now on', realKey);
+            }
+          }
+          merged.lastActiveMonthKey = realKey;
+
+          setRaw(merged);
           log.info('data loaded from storage');
         } catch (e) {
           log.error('failed to parse stored data', e);
@@ -290,22 +336,10 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     archiveCurrentMonth: () => {
       log.info('archiveCurrentMonth');
       setRaw((r) => {
-        const d = derive(r);
         const now = new Date();
-        const monthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-        const record: MonthlyRecord = {
-          monthKey,
-          month: monthLabel(now),
-          byCategory: d.byCategory,
-          income: d.income,
-          expense: d.expense,
-          net: d.net,
-        };
-        const existing = (r.monthlyRecords ?? []).findIndex((m) => m.monthKey === monthKey);
-        const records = existing >= 0
-          ? (r.monthlyRecords ?? []).map((m, i) => (i === existing ? record : m))
-          : [...(r.monthlyRecords ?? []), record];
-        return { ...r, monthlyRecords: records.sort((a, b) => b.monthKey.localeCompare(a.monthKey)) };
+        const monthKey = monthKeyOf(now);
+        const record = buildMonthlyRecord(r, monthKey, monthLabel(now));
+        return { ...r, monthlyRecords: upsertMonthlyRecord(r.monthlyRecords, record) };
       });
     },
 

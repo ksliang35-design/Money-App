@@ -817,3 +817,101 @@ describe('fxRates effect on portfolioValue', () => {
     );
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// 12. archiveCurrentMonth() and automatic month rollover
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe('archiveCurrentMonth() and month rollover', () => {
+  // Fake only Date — RNTL's act()/waitFor() need real timers to keep polling,
+  // so every timer/clock API except Date is explicitly left real.
+  const KEEP_REAL: any[] = [
+    'hrtime', 'nextTick', 'performance', 'queueMicrotask',
+    'requestAnimationFrame', 'cancelAnimationFrame', 'requestIdleCallback', 'cancelIdleCallback',
+    'setImmediate', 'clearImmediate', 'setInterval', 'clearInterval', 'setTimeout', 'clearTimeout',
+  ];
+
+  beforeEach(() => {
+    jest.useFakeTimers({ doNotFake: KEEP_REAL });
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  test('archiveCurrentMonth() saves live totals under the real current monthKey', async () => {
+    jest.setSystemTime(new Date(2026, 8, 3)); // 3 Sep 2026
+    const result = await mountAndWaitForLoad();
+
+    await act(async () => { result.current.archiveCurrentMonth(); });
+
+    await waitFor(() => {
+      expect(result.current.data.monthlyRecords.some((m) => m.monthKey === '2026-09')).toBe(true);
+    });
+    const rec = result.current.data.monthlyRecords.find((m) => m.monthKey === '2026-09')!;
+    expect(rec.month).toBe('September 2026');
+    expect(rec.income).toBe(result.current.data.income);
+    expect(rec.expense).toBe(result.current.data.expense);
+  });
+
+  test('auto-archives the prior month on load once the real month has moved on', async () => {
+    jest.setSystemTime(new Date(2026, 8, 3)); // app reopened 3 Sep 2026
+    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify({
+      name: 'RolloverUser',
+      lastActiveMonthKey: '2026-08', // data was last active in August
+      incomes: [{ id: 'i1', label: 'Salary', amount: 5000, type: 'salary' }],
+      expenses: [{ id: 'e1', label: 'Rent', amount: 1200, method: 'bank', category: 'bills' }],
+      monthlyRecords: [],
+    }));
+
+    const result = await mountAndWaitForLoad();
+
+    const rec = result.current.data.monthlyRecords.find((m) => m.monthKey === '2026-08');
+    expect(rec).toBeDefined();
+    expect(rec?.month).toBe('August 2026');
+    expect(rec?.income).toBe(5000);
+    expect(rec?.expense).toBe(1200);
+
+    // Aggregate-only rollover: live expenses/incomes carry forward untouched —
+    // there's no per-transaction date yet to separate old entries from new ones.
+    expect(result.current.data.expenses).toHaveLength(1);
+    expect(result.current.data.name).toBe('RolloverUser');
+    expect(result.current.data.month).toBe('September 2026');
+  });
+
+  test('does not archive or duplicate when the stored month already matches the real month', async () => {
+    jest.setSystemTime(new Date(2026, 8, 3));
+    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify({
+      lastActiveMonthKey: '2026-09',
+      monthlyRecords: [],
+    }));
+
+    const result = await mountAndWaitForLoad();
+    expect(result.current.data.monthlyRecords).toHaveLength(0);
+  });
+
+  test('does not overwrite a month already archived (e.g. via a manual save earlier that month)', async () => {
+    jest.setSystemTime(new Date(2026, 8, 2)); // reopened 2 Sep 2026
+    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify({
+      lastActiveMonthKey: '2026-08',
+      // User manually tapped "Save Current Month" on Aug 31 with these totals...
+      monthlyRecords: [
+        { monthKey: '2026-08', month: 'August 2026', byCategory: { food: 100 }, income: 5000, expense: 1200, net: 3800 },
+      ],
+      // ...but more expenses were added after that save and before the app was
+      // reopened in September — the auto-rollover must NOT let these overwrite
+      // the already-archived snapshot.
+      incomes: [{ id: 'i1', label: 'Salary', amount: 5000, type: 'salary' }],
+      expenses: [
+        { id: 'e1', label: 'Rent',       amount: 1200, method: 'bank', category: 'bills' },
+        { id: 'e2', label: 'Late night', amount: 300,  method: 'cash', category: 'food'  },
+      ],
+    }));
+
+    const result = await mountAndWaitForLoad();
+
+    const rec = result.current.data.monthlyRecords.find((m) => m.monthKey === '2026-08');
+    expect(rec?.expense).toBe(1200); // untouched — not the live 1500
+    expect(rec?.byCategory).toEqual({ food: 100 });
+  });
+});

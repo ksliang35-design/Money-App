@@ -4,6 +4,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Card } from '@/components/ui/Card';
+import { MonthSelector, type MonthOption } from '@/components/ui/MonthSelector';
 import { ProgressBar } from '@/components/ui/ProgressBar';
 import { SectionLabel } from '@/components/ui/SectionLabel';
 import { MF, MR, MS, fmt } from '@/constants/money-theme';
@@ -13,6 +14,8 @@ import { CATEGORY_STYLE, type ExpenseCategory } from '@/constants/mock-data';
 import { useT } from '@/i18n';
 import { useAppData, type MonthlyRecord } from '@/store/AppDataProvider';
 
+const CURRENT_KEY = 'current';
+
 export default function ReportsScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
@@ -20,7 +23,7 @@ export default function ReportsScreen() {
   const t = useT();
   const C = useTheme();
   const styles = useMemo(() => makeStyles(C), [C]);
-  const [selectedMonthKey, setSelectedMonthKey] = useState<string | null>(null);
+  const [selectedMonthKey, setSelectedMonthKey] = useState<string>(CURRENT_KEY);
   const [savedFlash, setSavedFlash] = useState(false);
 
   const catLabels: Record<ExpenseCategory, string> = {
@@ -57,9 +60,28 @@ export default function ReportsScreen() {
     [...(data.monthlyRecords ?? [])].sort((a, b) => b.monthKey.localeCompare(a.monthKey)),
     [data.monthlyRecords],
   );
-  const activeRecord: MonthlyRecord | undefined = selectedMonthKey
-    ? (sortedRecords.find((r) => r.monthKey === selectedMonthKey) ?? sortedRecords[0])
-    : sortedRecords[0];
+
+  // "Current" is a virtual record built from live data — not one of the
+  // archived aggregate snapshots — so browsing to it always reflects
+  // what's actually happening this month, not the last saved figure.
+  const currentAsRecord: MonthlyRecord = useMemo(() => ({
+    monthKey: CURRENT_KEY,
+    month: data.month,
+    byCategory: data.byCategory,
+    income: data.income,
+    expense: data.expense,
+    net: data.net,
+  }), [data.month, data.byCategory, data.income, data.expense, data.net]);
+
+  const monthOptions: MonthOption[] = useMemo(() => [
+    { key: CURRENT_KEY, label: t('reports.current') },
+    ...sortedRecords.map((r) => ({ key: r.monthKey, label: r.month })),
+  ], [sortedRecords, t]);
+
+  const activeRecord: MonthlyRecord =
+    selectedMonthKey === CURRENT_KEY
+      ? currentAsRecord
+      : (sortedRecords.find((r) => r.monthKey === selectedMonthKey) ?? currentAsRecord);
 
   const handleSaveMonth = () => {
     archiveCurrentMonth();
@@ -212,84 +234,62 @@ export default function ReportsScreen() {
             </Pressable>
           </View>
 
-          {sortedRecords.length === 0 ? (
-            <Text style={styles.empty}>{t('reports.noRecords')}</Text>
+          <MonthSelector
+            options={monthOptions}
+            selectedKey={selectedMonthKey}
+            onSelect={setSelectedMonthKey}
+          />
+
+          <View style={styles.mthSummaryRow}>
+            <View style={styles.mthSummaryCol}>
+              <Text style={[styles.mthSummaryLabel, { color: C.emerald }]}>{t('reports.income')}</Text>
+              <Text style={[styles.mthSummaryAmt, { color: C.emerald }]}>{fmt(activeRecord.income)}</Text>
+            </View>
+            <View style={styles.summaryDivider} />
+            <View style={styles.mthSummaryCol}>
+              <Text style={[styles.mthSummaryLabel, { color: C.clay }]}>{t('reports.expense')}</Text>
+              <Text style={[styles.mthSummaryAmt, { color: C.clay }]}>{fmt(activeRecord.expense)}</Text>
+            </View>
+            <View style={styles.summaryDivider} />
+            <View style={styles.mthSummaryCol}>
+              <Text style={[styles.mthSummaryLabel, { color: activeRecord.net >= 0 ? C.gold : C.clay }]}>
+                {t('reports.net')}
+              </Text>
+              <Text style={[styles.mthSummaryAmt, { color: activeRecord.net >= 0 ? C.gold : C.clay }]}>
+                {fmt(Math.abs(activeRecord.net))}
+              </Text>
+            </View>
+          </View>
+
+          {/* Category breakdown */}
+          <SectionLabel text={t('reports.byCategory')} style={styles.mthCatHeader} />
+          {activeRecordCats.length === 0 ? (
+            <Text style={styles.empty}>{t('reports.noSpend')}</Text>
           ) : (
-            <>
-              {/* Month pill selector */}
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                style={styles.monthScroll}
-                contentContainerStyle={styles.monthPills}>
-                {sortedRecords.map((r) => {
-                  const active = (selectedMonthKey ?? sortedRecords[0]?.monthKey) === r.monthKey;
-                  return (
-                    <Pressable
-                      key={r.monthKey}
-                      style={[styles.monthPill, active && { backgroundColor: C.emerald + '22', borderColor: C.emerald }]}
-                      onPress={() => setSelectedMonthKey(r.monthKey)}>
-                      <Text style={[styles.monthPillTxt, active && { color: C.emerald, fontFamily: MF.bold }]}>
-                        {r.month}
-                      </Text>
-                    </Pressable>
-                  );
-                })}
-              </ScrollView>
-
-              {/* Selected month summary */}
-              {activeRecord && (
-                <>
-                  <View style={styles.mthSummaryRow}>
-                    <View style={styles.mthSummaryCol}>
-                      <Text style={[styles.mthSummaryLabel, { color: C.emerald }]}>{t('reports.income')}</Text>
-                      <Text style={[styles.mthSummaryAmt, { color: C.emerald }]}>{fmt(activeRecord.income)}</Text>
-                    </View>
-                    <View style={styles.summaryDivider} />
-                    <View style={styles.mthSummaryCol}>
-                      <Text style={[styles.mthSummaryLabel, { color: C.clay }]}>{t('reports.expense')}</Text>
-                      <Text style={[styles.mthSummaryAmt, { color: C.clay }]}>{fmt(activeRecord.expense)}</Text>
-                    </View>
-                    <View style={styles.summaryDivider} />
-                    <View style={styles.mthSummaryCol}>
-                      <Text style={[styles.mthSummaryLabel, { color: activeRecord.net >= 0 ? C.gold : C.clay }]}>
-                        {t('reports.net')}
-                      </Text>
-                      <Text style={[styles.mthSummaryAmt, { color: activeRecord.net >= 0 ? C.gold : C.clay }]}>
-                        {fmt(Math.abs(activeRecord.net))}
-                      </Text>
-                    </View>
+            activeRecordCats.map(([cat, amt]) => {
+              const s = CATEGORY_STYLE[cat as keyof typeof CATEGORY_STYLE] ?? CATEGORY_STYLE.other;
+              const pct = activeRecord.expense > 0 ? Math.round((amt / activeRecord.expense) * 100) : 0;
+              const maxAmt = activeRecordCats[0]?.[1] ?? 1;
+              return (
+                <View key={cat} style={styles.barRow}>
+                  <View style={[styles.catIcon, { backgroundColor: s.bg }]}>
+                    <Text style={styles.catIconText}>{s.icon}</Text>
                   </View>
+                  <View style={styles.barBody}>
+                    <View style={styles.barTop}>
+                      <Text style={styles.barRowLabel}>{catLabels[cat as keyof typeof catLabels] ?? cat}</Text>
+                      <Text style={styles.barRowAmt}>{fmt(amt)}</Text>
+                    </View>
+                    <ProgressBar value={Math.max(4, (amt / maxAmt) * 100)} color={s.fg} />
+                    <Text style={styles.barPct}>{t('reports.ofTotal', { pct })}</Text>
+                  </View>
+                </View>
+              );
+            })
+          )}
 
-                  {/* Category breakdown */}
-                  <SectionLabel text={t('reports.byCategory')} style={styles.mthCatHeader} />
-                  {activeRecordCats.length === 0 ? (
-                    <Text style={styles.empty}>{t('reports.noSpend')}</Text>
-                  ) : (
-                    activeRecordCats.map(([cat, amt]) => {
-                      const s = CATEGORY_STYLE[cat as keyof typeof CATEGORY_STYLE] ?? CATEGORY_STYLE.other;
-                      const pct = activeRecord.expense > 0 ? Math.round((amt / activeRecord.expense) * 100) : 0;
-                      const maxAmt = activeRecordCats[0]?.[1] ?? 1;
-                      return (
-                        <View key={cat} style={styles.barRow}>
-                          <View style={[styles.catIcon, { backgroundColor: s.bg }]}>
-                            <Text style={styles.catIconText}>{s.icon}</Text>
-                          </View>
-                          <View style={styles.barBody}>
-                            <View style={styles.barTop}>
-                              <Text style={styles.barRowLabel}>{catLabels[cat as keyof typeof catLabels] ?? cat}</Text>
-                              <Text style={styles.barRowAmt}>{fmt(amt)}</Text>
-                            </View>
-                            <ProgressBar value={Math.max(4, (amt / maxAmt) * 100)} color={s.fg} />
-                            <Text style={styles.barPct}>{t('reports.ofTotal', { pct })}</Text>
-                          </View>
-                        </View>
-                      );
-                    })
-                  )}
-                </>
-              )}
-            </>
+          {sortedRecords.length === 0 && (
+            <Text style={styles.hint}>{t('reports.noRecords')}</Text>
           )}
         </Card>
 
@@ -367,20 +367,12 @@ function makeStyles(C: AppTheme) {
     },
     saveMonthTxt: { fontSize: 11, fontFamily: MF.bold, color: C.emerald },
 
-    monthScroll: { marginBottom: MS.md },
-    monthPills: { gap: MS.sm, paddingBottom: 2 },
-    monthPill: {
-      paddingHorizontal: MS.md, paddingVertical: 7,
-      borderRadius: MR.md, borderWidth: 1, borderColor: C.line,
-      backgroundColor: C.card,
-    },
-    monthPillTxt: { fontSize: 12, fontFamily: MF.medium, color: C.muted },
-
     mthSummaryRow: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: MS.md },
     mthSummaryCol: { flex: 1, alignItems: 'center' },
     mthSummaryLabel: { fontSize: 10, fontFamily: MF.medium, textTransform: 'uppercase', letterSpacing: 0.5 },
     mthSummaryAmt: { fontSize: 14, fontFamily: MF.bold, marginTop: 4 },
 
     mthCatHeader: { marginBottom: MS.md },
+    hint: { fontSize: 11, fontFamily: MF.regular, color: C.muted, marginTop: MS.md, textAlign: 'center' },
   });
 }
